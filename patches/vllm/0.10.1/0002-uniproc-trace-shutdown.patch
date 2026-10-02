@@ -1,0 +1,17 @@
+diff --git a/vllm/v1/executor/abstract.py b/vllm/v1/executor/abstract.py
+--- a/vllm/v1/executor/abstract.py
++++ b/vllm/v1/executor/abstract.py
+@@ -98,7 +98,11 @@ class Executor(ExecutorBase):
+ 
+ 
+ class UniProcExecutor(UniProcExecutorV0, Executor):
+-    pass
++
++    def shutdown(self) -> None:
++        from moe_trace.adapters.vllm_0_10_1 import close_trace
++        close_trace()
++        super().shutdown()
+ 
+ 
+ class ExecutorWithExternalLauncher(ExecutorWithExternalLauncherV0, Executor):
+

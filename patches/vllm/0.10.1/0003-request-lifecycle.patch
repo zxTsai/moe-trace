@@ -1,0 +1,20 @@
+diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -970,6 +970,8 @@ class Scheduler(SchedulerInterface):
+     def add_request(self, request: Request) -> None:
+         self.waiting.add_request(request)
+         self.requests[request.request_id] = request
++        from moe_trace.adapters.vllm_0_10_1 import request_started
++        request_started(self, request)
+         if self.log_stats:
+             request.record_event(EngineCoreEventType.QUEUED)
+ 
+@@ -1020,5 +1022,7 @@ class Scheduler(SchedulerInterface):
+     def _free_request(self, request: Request) -> Optional[dict[str, Any]]:
+         assert request.is_finished()
++        from moe_trace.adapters.vllm_0_10_1 import request_finished
++        request_finished(self, request)
+ 
+         delay_free_blocks, kv_xfer_params = self._connector_finished(request)
+         self.encoder_cache_manager.free(request)

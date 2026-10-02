@@ -1,0 +1,74 @@
+{
+  "run_id": "f707f9e8-87c1-415e-8c42-ef0ad5f1c5dd",
+  "passed": true,
+  "issues": [],
+  "request_count": 11,
+  "terminal_request_count": 11,
+  "record_count": 6288,
+  "cases": [
+    {
+      "case": "stop",
+      "api_id": "cmpl-d023d63da8944e09a668e65368da60b6",
+      "request_id": "cmpl-d023d63da8944e09a668e65368da60b6-0",
+      "event": "finished",
+      "reason": "stop",
+      "details": {
+        "num_output_tokens": 1,
+        "num_prompt_tokens": 4,
+        "scheduler_status": "FINISHED_STOPPED",
+        "stop_reason": 203
+      },
+      "input_rows": 4,
+      "route_records": 96,
+      "last_execution": "exec-000000000142"
+    },
+    {
+      "case": "length",
+      "api_id": "cmpl-d9b1d6c83a9748bca32ab81858532ab0",
+      "request_id": "cmpl-d9b1d6c83a9748bca32ab81858532ab0-0",
+      "event": "finished",
+      "reason": "length",
+      "details": {
+        "num_output_tokens": 4,
+        "num_prompt_tokens": 4,
+        "scheduler_status": "FINISHED_LENGTH_CAPPED",
+        "stop_reason": null
+      },
+      "input_rows": 7,
+      "route_records": 168,
+      "last_execution": "exec-000000000146"
+    },
+    {
+      "case": "cancel",
+      "api_id": "cmpl-415c087839694e20888fef5958a34da0",
+      "request_id": "cmpl-415c087839694e20888fef5958a34da0-0",
+      "event": "cancelled",
+      "reason": "abort",
+      "details": {
+        "num_output_tokens": 3,
+        "num_prompt_tokens": 6,
+        "scheduler_status": "FINISHED_ABORTED",
+        "stop_reason": null
+      },
+      "input_rows": 8,
+      "route_records": 192,
+      "last_execution": "exec-000000000149"
+    },
+    {
+      "case": "after_cancel",
+      "api_id": "cmpl-79537207fbcb4edf903d27c532a51bf1",
+      "request_id": "cmpl-79537207fbcb4edf903d27c532a51bf1-0",
+      "event": "finished",
+      "reason": "length",
+      "details": {
+        "num_output_tokens": 2,
+        "num_prompt_tokens": 3,
+        "scheduler_status": "FINISHED_LENGTH_CAPPED",
+        "stop_reason": null
+      },
+      "input_rows": 4,
+      "route_records": 96,
+      "last_execution": "exec-000000000151"
+    }
+  ]
+}

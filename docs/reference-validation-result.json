@@ -1,0 +1,235 @@
+{
+  "run_id": "75b6e146-dd43-4a10-8fb2-2fb79d186ebb",
+  "passed": true,
+  "issues": [],
+  "compared_input_rows": 255,
+  "compared_route_records": 6120,
+  "compared_expert_ids": 48960,
+  "consumer_calls": {
+    "fused_experts": 1248
+  },
+  "concurrent_executions": 18,
+  "mixed_phase_executions": 2,
+  "request_membership": [
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-c6be8183c7404770acef27cff4a31f5d-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-f4b565c6ebfa47538d5e8c18067e7cd5-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-f4b565c6ebfa47538d5e8c18067e7cd5-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-f4b565c6ebfa47538d5e8c18067e7cd5-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-f4b565c6ebfa47538d5e8c18067e7cd5-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-f4b565c6ebfa47538d5e8c18067e7cd5-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0",
+      "cmpl-f4b565c6ebfa47538d5e8c18067e7cd5-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-290e212a0e3740ac96c60cc235ceb99a-0"
+    ],
+    [
+      "cmpl-06932012a81f4f51ba9f8e9ade6150a0-0"
+    ],
+    [
+      "cmpl-06932012a81f4f51ba9f8e9ade6150a0-0"
+    ],
+    [
+      "cmpl-06932012a81f4f51ba9f8e9ade6150a0-0"
+    ],
+    [
+      "cmpl-06932012a81f4f51ba9f8e9ade6150a0-0"
+    ]
+  ],
+  "prefill_spans": {
+    "cmpl-290e212a0e3740ac96c60cc235ceb99a-0": [
+      {
+        "execution_id": "exec-000000000001",
+        "first": 0,
+        "last": 4,
+        "count": 5
+      }
+    ],
+    "cmpl-c6be8183c7404770acef27cff4a31f5d-0": [
+      {
+        "execution_id": "exec-000000000019",
+        "first": 0,
+        "last": 30,
+        "count": 31
+      }
+    ],
+    "cmpl-f4b565c6ebfa47538d5e8c18067e7cd5-0": [
+      {
+        "execution_id": "exec-000000000041",
+        "first": 0,
+        "last": 3,
+        "count": 4
+      }
+    ],
+    "cmpl-06932012a81f4f51ba9f8e9ade6150a0-0": [
+      {
+        "execution_id": "exec-000000000049",
+        "first": 0,
+        "last": 63,
+        "count": 64
+      },
+      {
+        "execution_id": "exec-000000000050",
+        "first": 64,
+        "last": 127,
+        "count": 64
+      },
+      {
+        "execution_id": "exec-000000000051",
+        "first": 128,
+        "last": 150,
+        "count": 23
+      }
+    ]
+  }
+}

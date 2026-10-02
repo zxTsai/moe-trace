@@ -1,0 +1,21 @@
+trace:
+  enabled: false
+  output_root: /home/czx/code/moe-routing/outputs
+  phases: [prefill, decode]
+  layers: null
+  request_labels: null
+  save_token_ids: false
+  save_expert_weights: false
+  strict: true
+  buffer_records: 8192
+  shard_records: 4096
+  engine_id: engine-0
+
+vllm:
+  enforce_eager: true
+  enable_prefix_caching: false
+  speculative_model: null
+  tensor_parallel_size: 1
+  pipeline_parallel_size: 1
+  data_parallel_size: 1
+

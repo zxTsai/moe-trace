@@ -1,0 +1,63 @@
+diff --git a/vllm/model_executor/layers/fused_moe/layer.py b/vllm/model_executor/layers/fused_moe/layer.py
+--- a/vllm/model_executor/layers/fused_moe/layer.py
++++ b/vllm/model_executor/layers/fused_moe/layer.py
+@@ -463,6 +463,10 @@ class FusedMoEMethodBase(QuantizeMethodBase):
+             logical_to_physical_map=logical_to_physical_map,
+             logical_replica_count=logical_replica_count)
+ 
++        # Capture the exact IDs consumed below; this is a no-op unless enabled.
++        from moe_trace.adapters.vllm_0_10_1 import record_routes
++        record_routes(layer.layer_name, topk_ids, topk_weights)
++
+         if self.rocm_aiter_moe_enabled:
+             return self.rocm_aiter_fused_experts(
+                 hidden_states=x,
+diff --git a/vllm/v1/worker/gpu_model_runner.py b/vllm/v1/worker/gpu_model_runner.py
+--- a/vllm/v1/worker/gpu_model_runner.py
++++ b/vllm/v1/worker/gpu_model_runner.py
+@@ -1603,18 +1603,20 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
+         cudagraph_runtime_mode, batch_descriptor = \
+             self.cudagraph_dispatcher.dispatch(batch_descriptor)
+ 
+-        # Run the model.
+-        # Use persistent buffers for CUDA graphs.
+-        with set_forward_context(
+-                attn_metadata,
+-                self.vllm_config,
+-                num_tokens=num_input_tokens,
+-                num_tokens_across_dp=num_tokens_across_dp,
+-                cudagraph_runtime_mode=cudagraph_runtime_mode,
+-                batch_descriptor=batch_descriptor,
+-        ), self.maybe_get_kv_connector_output(
+-                scheduler_output) as kv_connector_output:
+-            model_output = self.model(
++        from moe_trace.adapters.vllm_0_10_1 import trace_execution
++        with trace_execution(self, scheduler_output,
++                             num_scheduled_tokens_np):
++            # Run the model. Use persistent buffers for CUDA graphs.
++            with set_forward_context(
++                    attn_metadata,
++                    self.vllm_config,
++                    num_tokens=num_input_tokens,
++                    num_tokens_across_dp=num_tokens_across_dp,
++                    cudagraph_runtime_mode=cudagraph_runtime_mode,
++                    batch_descriptor=batch_descriptor,
++            ), self.maybe_get_kv_connector_output(
++                    scheduler_output) as kv_connector_output:
++                model_output = self.model(
+                 input_ids=input_ids,
+                 positions=positions,
+                 intermediate_tensors=intermediate_tensors,
+diff --git a/vllm/v1/executor/multiproc_executor.py b/vllm/v1/executor/multiproc_executor.py
+--- a/vllm/v1/executor/multiproc_executor.py
++++ b/vllm/v1/executor/multiproc_executor.py
+@@ -478,6 +478,9 @@ class WorkerProc:
+         return cast(list[WorkerProcHandle], ready_proc_handles)
+ 
+     def shutdown(self):
++        # Flush and validate an enabled trace before tearing down the worker.
++        from moe_trace.adapters.vllm_0_10_1 import close_trace
++        close_trace()
+         self.rpc_broadcast_mq = None
+         self.worker_response_mq = None
+         destroy_model_parallel()
