@@ -1,4 +1,5 @@
 """Real HTTP stop/length/disconnect lifecycle workload (local test service)."""
+import argparse
 import json
 import time
 import urllib.request
@@ -16,6 +17,9 @@ def request(**kwargs):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, default=Path("/tmp/moe-trace-lifecycle-client.json"))
+    args = parser.parse_args()
     results = []
     # Explicit token-stop is enforced inside the scheduler, unlike string-stop
     # processing in the API output processor. First generated newline is token 203.
@@ -48,5 +52,5 @@ if __name__ == "__main__":
         out = json.load(response)
         results.append(dict(case="after_cancel", api_id=out["id"],
                             finish_reason=out["choices"][0]["finish_reason"], usage=out["usage"]))
-    Path("/tmp/moe-trace-lifecycle-client.json").write_text(json.dumps(results, indent=2) + "\n")
+    args.output.write_text(json.dumps(results, indent=2) + "\n")
     print(json.dumps(results, indent=2))

@@ -9,9 +9,9 @@ from .reader import TraceReader
 
 
 def write_details_json(reader: TraceReader, path: str | Path, **filters: Any) -> None:
-    """Export native JSON arrays and explicit storage validation status."""
+    """Overwrite the selected JSON export with the current trace details."""
     issues = reader.validate()
-    with Path(path).open("x", encoding="utf-8") as stream:
+    with Path(path).open("w", encoding="utf-8") as stream:
         json.dump({
             "schema_version": reader.metadata["schema_version"],
             "run_id": reader.metadata["run_id"],

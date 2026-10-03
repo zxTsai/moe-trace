@@ -14,6 +14,7 @@ test = ["pytest>=8"]
 
 [project.scripts]
 moe-trace = "moe_trace.cli:main"
+moe-trace-env = "moe_trace.environment:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -21,4 +22,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-

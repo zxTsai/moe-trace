@@ -1,0 +1,11 @@
+{
+  "version": "0.10.1",
+  "upstream_commit_id": "aab549870df50edf0512f0a59b574f692f546465",
+  "sha256": {
+    "model_executor/layers/fused_moe/layer.py": "eb0dfdf804d997bb3c91dd769843e33f8efab92ca1ebc2a7f80f50574017a2c2",
+    "v1/worker/gpu_model_runner.py": "04a0d9e185080b88ecff24e716110bb7e01c3ddfc4567ec77ca8270614df82fa",
+    "v1/executor/multiproc_executor.py": "7a9d17ce88c92f085bdde2da1e5ef17e60188db6fd1ff6b8277d1ddff36ea4f4",
+    "v1/executor/abstract.py": "3d3f11c245518068f0b9779565453e874fd5939cb01a894d5398aefa5f2f6d06",
+    "v1/core/sched/scheduler.py": "f42c72e0848d669b07a39ececd624431a89aa55a806b568efd86b4af80dea7a1"
+  }
+}

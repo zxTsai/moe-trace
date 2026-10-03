@@ -5,6 +5,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
+
 from moe_trace.reader import TraceReader
 
 
@@ -13,6 +15,7 @@ def compare(run_dir, reference_path):
     issues = reader.validate()
     reference_inputs = {}
     reference_routes = {}
+    reference_weights = {}
     consumers = Counter()
     for line in Path(reference_path).read_text().splitlines():
         event = json.loads(line)
@@ -35,6 +38,8 @@ def compare(run_dir, reference_path):
                 if key in reference_routes:
                     issues.append(f"duplicate reference route: {key}")
                 reference_routes[key] = ids
+                if "expert_weights" in event:
+                    reference_weights[key] = event["expert_weights"][row_id]
     steps = list(reader.jsonl("steps.jsonl"))
     if {s["execution_id"] for s in steps} != set(reference_inputs):
         issues.append("saved/reference execution sets differ")
@@ -68,6 +73,11 @@ def compare(run_dir, reference_path):
             saved_keys.add(key)
             if arrays["expert_ids"][i].tolist() != reference_routes.get(key):
                 issues.append(f"consumer route mismatch: {key}")
+            if "expert_weights" in arrays and (
+                    key not in reference_weights or not np.array_equal(
+                        arrays["expert_weights"][i],
+                        np.asarray(reference_weights[key], dtype=np.float32))):
+                issues.append(f"consumer weight mismatch: {key}")
             route_count += 1
     if saved_keys != set(reference_routes):
         issues.append("saved/reference route key sets differ")

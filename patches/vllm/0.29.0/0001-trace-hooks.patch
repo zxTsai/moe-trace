@@ -1,0 +1,74 @@
+--- a/v1/engine/core.py
++++ b/v1/engine/core.py
+@@ -1529,6 +1529,8 @@
+ 
+         # Exit when no work remaining
+         if not self.has_work():
++            from moe_trace.adapters.vllm_0_29_0 import close_trace
++            close_trace()
+             logger.info(
+                 "[shutdown] EngineCore: request processing complete; "
+                 "starting resource teardown"
+--- a/v1/worker/gpu_model_runner.py
++++ b/v1/worker/gpu_model_runner.py
+@@ -4504,7 +4504,10 @@
+                 num_tokens_unpadded,
+                 ubatch_slices_padded,
+             )
++        from moe_trace.adapters.vllm_0_29_0 import trace_execution
+         with (
++            trace_execution(self, scheduler_output, num_scheduled_tokens_np,
++                            input_ids, positions),
+             set_forward_context(
+                 attn_metadata,
+                 self.vllm_config,
+--- a/model_executor/layers/fused_moe/runner/moe_runner.py
++++ b/model_executor/layers/fused_moe/runner/moe_runner.py
+@@ -611,6 +611,8 @@
+             shared_experts_input, SharedExpertsOrder.NO_OVERLAP
+         )
+ 
++        from moe_trace.adapters.vllm_0_29_0 import check_route_backend, record_routes
++        check_route_backend(self.routed_experts.quant_method.is_monolithic)
+         if self.routed_experts.quant_method.is_monolithic:
+             # Monolithic kernels: pass router_logits to routed_experts
+             fused_out = self.routed_experts.forward_monolithic(
+@@ -627,6 +629,7 @@
+                 input_ids=input_ids,
+             )
+ 
++            record_routes(self.layer_name, topk_ids, topk_weights)
+             fused_out = self.routed_experts.forward_modular(
+                 x=hidden_states,
+                 topk_weights=topk_weights,
+--- a/v1/core/sched/scheduler.py
++++ b/v1/core/sched/scheduler.py
+@@ -2405,6 +2405,8 @@
+                 request.streaming_queue = deque()
+             self._enqueue_waiting_request(request)
+             self.requests[request.request_id] = request
++            from moe_trace.adapters.vllm_0_29_0 import request_started
++            request_started(self, request)
+             if self.spec_decode_metrics_level != "none":
+                 request.spec_decode_metrics = RequestSpecDecodeMetrics.new(
+                     self.num_spec_tokens
+@@ -2481,6 +2483,8 @@
+         self, request: Request, delay_free_blocks: bool = False
+     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+         assert request.is_finished()
++        from moe_trace.adapters.vllm_0_29_0 import request_finished
++        request_finished(self, request)
+ 
+         self._inflight_prefills.discard(request)
+         connector_delay_free_blocks, kv_xfer_params = self._connector_finished(request)
+--- a/v1/executor/uniproc_executor.py
++++ b/v1/executor/uniproc_executor.py
+@@ -150,6 +150,8 @@
+         return
+ 
+     def shutdown(self) -> None:
++        from moe_trace.adapters.vllm_0_29_0 import close_trace
++        close_trace()
+         if worker := self.driver_worker:
+             worker.shutdown()
+ 

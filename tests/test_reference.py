@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from moe_trace.config import TraceConfig
 from moe_trace.session import InputRow, TraceSession
@@ -13,14 +14,18 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
-def test_reference_detects_request_and_expert_corruption(tmp_path):
-    config = TraceConfig(enabled=True, output_root=tmp_path, save_token_ids=True)
+@pytest.mark.parametrize("save_weights", [False, True])
+def test_reference_detects_request_and_expert_corruption(tmp_path, save_weights):
+    config = TraceConfig(enabled=True, output_root=tmp_path, save_token_ids=True,
+                         save_expert_weights=save_weights)
     session = TraceSession(config, model={}, moe_layers=[0],
                            experts_per_layer={0: 4}, top_k=2)
     session.record_execution(step_id=1, execution_id="e1",
                              rows=[InputRow("a", 0, "prefill", 7),
                                    InputRow("b", 3, "decode", 8)],
-                             routes={0: (np.array([[0, 1], [2, 3]]), None)})
+                             routes={0: (np.array([[0, 1], [2, 3]]),
+                                         np.array([[0.25, 0.75], [0.5, 0.5]], dtype=np.float32)
+                                         if save_weights else None)})
     session.request_event("a", "finished", reason="stop")
     session.request_event("b", "finished", reason="length")
     session.close()
@@ -29,7 +34,7 @@ def test_reference_detects_request_and_expert_corruption(tmp_path):
         dict(row_id=1, request_id="b", token_position=3, phase="decode", token_id=8)]),
         dict(run_id=session.run_id, execution_id="e1", kind="consumer",
              layer_name="model.layers.0.experts", consumer="fused_experts",
-             expert_ids=[[0, 1], [2, 3]])]
+             expert_ids=[[0, 1], [2, 3]], expert_weights=[[0.25, 0.75], [0.5, 0.5]])]
     reference = tmp_path / "reference.jsonl"
 
     def save():
@@ -37,6 +42,12 @@ def test_reference_detects_request_and_expert_corruption(tmp_path):
 
     save()
     assert module.compare(session.run_dir, reference)["passed"]
+    if save_weights:
+        events[1]["expert_weights"][0] = [0.75, 0.25]
+        save()
+        assert any("consumer weight mismatch" in issue
+                   for issue in module.compare(session.run_dir, reference)["issues"])
+        events[1]["expert_weights"][0] = [0.25, 0.75]
     events[0]["rows"][0]["request_id"] = "b"
     events[1]["expert_ids"][0] = [1, 0]
     save()

@@ -1,0 +1,12 @@
+{
+  "version": "0.29.0",
+  "upstream_commit_id": "g98dff2a81",
+  "sha256": {
+    "v1/engine/core.py": "f990e260cebf0826d08cfd30955c0c7a85b9af00504841b91759ca5bc7b036f6",
+    "v1/worker/gpu_model_runner.py": "3970d7b764f80847842e10fc20f0e3f4f3da84cd97d042bb92db6e99147337e2",
+    "model_executor/layers/fused_moe/runner/moe_runner.py": "635282a1a5dfdf3fa70a7d8f9b0f120abe9142ca921bac24f3037832158c2091",
+    "v1/core/sched/scheduler.py": "abca7134821e2fb5cc8572df5c4a0b570ecf702646254327bc786fc452074983",
+    "v1/executor/uniproc_executor.py": "3cb039b80fe9b03dc1122f93c1f8a4098ef1355104b317ff6df25358f4349494",
+    "_version.py": "529bc91e4789731ad75e83cc8a1f60e8a918a0f738ee319eaf21bc4c8537d579"
+  }
+}

@@ -8,4 +8,5 @@ dist/
 
 # Trace runs can be large and must live outside source control.
 outputs/
+/trace.yaml
 *.npz

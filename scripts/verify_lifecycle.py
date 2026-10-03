@@ -1,6 +1,7 @@
 """Validate the actual lifecycle workload against scheduler events and routes."""
 import argparse
 import json
+import re
 from pathlib import Path
 
 from moe_trace.reader import TraceReader
@@ -19,9 +20,17 @@ def compare(run_dir, client_file):
                 "cancel": ("cancelled", "abort", "FINISHED_ABORTED"),
                 "after_cancel": ("finished", "length", "FINISHED_LENGTH_CAPPED")}
     for case in cases:
-        # This workload uses one completion per API call; verify the observed
-        # relationship rather than promoting it to a general API ID rule.
-        request = case["api_id"] + "-0"
+        # One completion per call. 0.29.0 additionally appends an eight-hex
+        # engine suffix (input_processor.assign_request_id). Require uniqueness.
+        base = case["api_id"] + "-0"
+        version = reader.metadata.get("framework", {}).get("vllm_version")
+        candidates = [rid for rid in terminals if (
+            re.fullmatch(re.escape(base) + r"-[0-9a-f]{8}", rid)
+            if version == "0.29.0" else rid == base)]
+        if len(candidates) != 1:
+            issues.append(f"ambiguous or absent API/internal mapping: {base}: {candidates}")
+            continue
+        request = candidates[0]
         terminal = terminals.get(request)
         if terminal is None:
             issues.append(f"no terminal matching this test's API ID: {request}")

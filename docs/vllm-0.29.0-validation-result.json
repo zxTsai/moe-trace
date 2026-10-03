@@ -1,0 +1,169 @@
+{
+  "vllm_version": "0.29.0",
+  "run_id": "8ca31e33-ccff-4434-8f03-8985c87ca9ef",
+  "reference": {
+    "run_id": "8ca31e33-ccff-4434-8f03-8985c87ca9ef",
+    "passed": true,
+    "issues": [],
+    "compared_input_rows": 278,
+    "compared_route_records": 6672,
+    "compared_expert_ids": 53376,
+    "consumer_calls": {
+      "forward_modular": 1512
+    },
+    "concurrent_executions": 17,
+    "mixed_phase_executions": 2,
+    "prefill_spans": {
+      "cmpl-bc88c6983efe9a05-0-85085c52": [
+        {
+          "execution_id": "exec-000000000001",
+          "first": 0,
+          "last": 4,
+          "count": 5
+        }
+      ],
+      "cmpl-95b03dee1dfa9864-0-a140e82a": [
+        {
+          "execution_id": "exec-000000000017",
+          "first": 0,
+          "last": 30,
+          "count": 31
+        }
+      ],
+      "cmpl-ba2030ad6c25d030-0-82be9ba5": [
+        {
+          "execution_id": "exec-000000000044",
+          "first": 0,
+          "last": 3,
+          "count": 4
+        }
+      ],
+      "cmpl-9eb75e8ec17c3bac-0-ad4083de": [
+        {
+          "execution_id": "exec-000000000050",
+          "first": 0,
+          "last": 63,
+          "count": 64
+        },
+        {
+          "execution_id": "exec-000000000051",
+          "first": 64,
+          "last": 127,
+          "count": 64
+        },
+        {
+          "execution_id": "exec-000000000052",
+          "first": 128,
+          "last": 150,
+          "count": 23
+        }
+      ],
+      "cmpl-81ea6c600ee0c263-0-a7df358f": [
+        {
+          "execution_id": "exec-000000000054",
+          "first": 0,
+          "last": 3,
+          "count": 4
+        }
+      ],
+      "cmpl-93a03d894567a368-0-b8b6e208": [
+        {
+          "execution_id": "exec-000000000055",
+          "first": 0,
+          "last": 3,
+          "count": 4
+        }
+      ],
+      "cmpl-93b1d45412795ce9-0-9afff39f": [
+        {
+          "execution_id": "exec-000000000059",
+          "first": 0,
+          "last": 5,
+          "count": 6
+        }
+      ],
+      "cmpl-9dda9a96cb34a831-0-b1ca5487": [
+        {
+          "execution_id": "exec-000000000062",
+          "first": 0,
+          "last": 2,
+          "count": 3
+        }
+      ]
+    }
+  },
+  "lifecycle": {
+    "run_id": "8ca31e33-ccff-4434-8f03-8985c87ca9ef",
+    "passed": true,
+    "issues": [],
+    "request_count": 8,
+    "terminal_request_count": 8,
+    "record_count": 6672,
+    "cases": [
+      {
+        "case": "stop",
+        "api_id": "cmpl-81ea6c600ee0c263",
+        "request_id": "cmpl-81ea6c600ee0c263-0-a7df358f",
+        "event": "finished",
+        "reason": "stop",
+        "details": {
+          "num_output_tokens": 1,
+          "num_prompt_tokens": 4,
+          "scheduler_status": "FINISHED_STOPPED",
+          "stop_reason": 203
+        },
+        "input_rows": 4,
+        "route_records": 96,
+        "last_execution": "exec-000000000054"
+      },
+      {
+        "case": "length",
+        "api_id": "cmpl-93a03d894567a368",
+        "request_id": "cmpl-93a03d894567a368-0-b8b6e208",
+        "event": "finished",
+        "reason": "length",
+        "details": {
+          "num_output_tokens": 4,
+          "num_prompt_tokens": 4,
+          "scheduler_status": "FINISHED_LENGTH_CAPPED",
+          "stop_reason": null
+        },
+        "input_rows": 7,
+        "route_records": 168,
+        "last_execution": "exec-000000000058"
+      },
+      {
+        "case": "cancel",
+        "api_id": "cmpl-93b1d45412795ce9",
+        "request_id": "cmpl-93b1d45412795ce9-0-9afff39f",
+        "event": "cancelled",
+        "reason": "abort",
+        "details": {
+          "num_output_tokens": 2,
+          "num_prompt_tokens": 6,
+          "scheduler_status": "FINISHED_ABORTED",
+          "stop_reason": null
+        },
+        "input_rows": 8,
+        "route_records": 192,
+        "last_execution": "exec-000000000061"
+      },
+      {
+        "case": "after_cancel",
+        "api_id": "cmpl-9dda9a96cb34a831",
+        "request_id": "cmpl-9dda9a96cb34a831-0-b1ca5487",
+        "event": "finished",
+        "reason": "length",
+        "details": {
+          "num_output_tokens": 2,
+          "num_prompt_tokens": 3,
+          "scheduler_status": "FINISHED_LENGTH_CAPPED",
+          "stop_reason": null
+        },
+        "input_rows": 4,
+        "route_records": 96,
+        "last_execution": "exec-000000000063"
+      }
+    ]
+  }
+}

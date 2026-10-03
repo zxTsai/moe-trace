@@ -1,0 +1,15 @@
+# Portable example. Relative output_root is resolved from the service working directory.
+trace:
+  enabled: true
+  output_root: ./outputs
+  save_token_ids: true
+  save_expert_weights: false
+  buffer_records: 8192
+  shard_records: 4096
+vllm:
+  enforce_eager: true
+  enable_prefix_caching: false
+  async_scheduling: false
+  tensor_parallel_size: 1
+  pipeline_parallel_size: 1
+  data_parallel_size: 1

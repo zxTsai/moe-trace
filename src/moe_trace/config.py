@@ -17,6 +17,7 @@ _TRACE_KEYS = {
 _VLLM_KEYS = {
     "enforce_eager", "enable_prefix_caching", "speculative_model",
     "tensor_parallel_size", "pipeline_parallel_size", "data_parallel_size",
+    "async_scheduling",
 }
 
 
@@ -122,4 +123,3 @@ def load_config(path: str | Path) -> TraceConfig:
         engine_id=engine_id,
         vllm=dict(vllm),
     )
-
