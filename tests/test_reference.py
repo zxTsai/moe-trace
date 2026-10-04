@@ -9,7 +9,7 @@ from moe_trace.config import TraceConfig
 from moe_trace.session import InputRow, TraceSession
 
 spec = importlib.util.spec_from_file_location(
-    "verify_reference", Path(__file__).parents[1] / "scripts/verify_reference.py")
+    "verify_reference", Path(__file__).parents[1] / "scripts/validation/verify_reference.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 

@@ -5,8 +5,8 @@ import time
 import urllib.request
 from pathlib import Path
 
-URL = "http://127.0.0.1:18001/v1/completions"
-MODEL = "/home/czx/code/moe-routing/models/granite-3.1-1b-a400m-instruct"
+URL = "http://127.0.0.1:8000/v1/completions"
+MODEL = "granite-moe"
 
 
 def request(**kwargs):
@@ -17,9 +17,12 @@ def request(**kwargs):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--url", default=URL)
+    parser.add_argument("--model", default=MODEL)
     parser.add_argument("--output", type=Path, default=Path("/tmp/moe-trace-lifecycle-client.json"))
     args = parser.parse_args()
+    URL, MODEL = args.url, args.model
     results = []
     # Explicit token-stop is enforced inside the scheduler, unlike string-stop
     # processing in the API output processor. First generated newline is token 203.

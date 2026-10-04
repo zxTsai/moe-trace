@@ -16,7 +16,7 @@
 - 同一运行 JSON/CSV 核验通过：6,672 明细、1,536 计数行、53,376 专家选择。
   重验报告写入 `/tmp/moe-trace-main-{reference,lifecycle}.json`。
 - 环境向导的真实 CUDA、原生扩展和隔离导入检查见
-  [环境准备说明](environment-setup.md)；已有 GPU 运行方法见
+  [环境准备说明](../guides/environment-setup.md)；已有 GPU 运行方法见
   [0.29.0 验证报告](vllm-0.29.0-validation.md)。
 
 这些检查包含已有 GPU 数据的重验，不是本次重新执行在线推理或压测。

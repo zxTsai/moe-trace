@@ -31,6 +31,10 @@ python scripts/prepare_environment.py --conda-env my-vllm --mode existing --yes
 ```
 
 `--dry-run` 只检测和显示计划。非交互安装必须同时提供 `--mode` 与 `--yes`。
+默认继承调用终端的网络代理，新环境同时安装 PySocks 以支持 SOCKS 代理。
+若已有环境缺少 SOCKS 支持，pip 可能报
+`Missing dependencies for SOCKS support`；可以配置可用的 HTTP 代理，或在
+允许直连时显式添加 `--no-proxy`，只对向导子进程关闭代理，不修改系统配置。
 新环境也可用 `--prefix /new/environment/path`，不能与 `--name` 同用。
 已有名称、已存在目录、base/root 均拒绝作为新环境目标，不覆盖已有环境。
 已有环境只通过 `pip install --no-deps --no-build-isolation -e` 安装工具本身，
@@ -73,8 +77,10 @@ CUDA/预编译扩展检查，以及隔离补丁和工具实际导入路径检查
 
 ## 本次验证边界
 
-已在现有 0.10.1 / 0.29.0 Python 环境分别通过 63 项自动化测试，其中安装
+重构后已在现有 0.10.1 / 0.29.0 Python 环境分别通过 82 项自动化测试，其中安装
 命令由测试替身模拟；另已通过现有 0.29.0 环境真实 CUDA 和扩展检测，
 以及真实安装包的隔离补丁应用和实际导入路径检查，未修改原安装包。
-完整新建环境的大体积 vLLM/PyTorch 在线下载尚未执行；模拟安装测试不等同于
-真实下载成功。0.10.1 的新 wheel 安装也未在本次验证中执行。
+完整新建 0.29.0 环境已实际尝试：首次缺少 SOCKS 支持的问题通过 Conda
+安装 PySocks 修复；随后镜像下载因连接超时和重试耗尽失败，未进入完整安装
+和 GPU 验证。临时环境及缓存保留，不自动重建或清理。
+0.10.1 的新 wheel 在线安装未执行；模拟流程测试不等同于真实安装成功。

@@ -172,7 +172,7 @@ def trace_execution(runner: Any, scheduler_output: Any,
     execution = _Execution(session, step_id, f"exec-{step_id:012d}", rows)
     reference_token = None
     if os.environ.get("MOE_TRACE_REFERENCE_DIR"):
-        from . import verification
+        from ..validation import vllm_0_10_1 as verification
         verification.install(runner, os.environ["MOE_TRACE_REFERENCE_DIR"])
         reference_token = verification.begin(session.run_id, execution.execution_id)
     token = _active.set(execution)
@@ -207,6 +207,8 @@ def record_routes(layer_name: str, topk_ids: Any, topk_weights: Any) -> None:
         execution.session.fail(error)
         raise error
     layer_id = int(match.group(1))
+    if layer_id not in execution.session.moe_layers:
+        return
     ids = topk_ids.detach().cpu().numpy().copy()
     # Cast after the real tensor has been copied; the model tensor itself is untouched.
     ids = ids.astype(np.int32, copy=False)

@@ -31,7 +31,7 @@ max-model-len=1024、max-num-seqs=8、max-num-batched-tokens=64、
 gpu-memory-utilization=0.65。运行包含调试期间的全部 11 个请求，没有删除失败
 触发尝试；共 151 execution、6288 路由记录、2 分片，11 个请求都有终止事件。
 
-修正后的 `scripts/lifecycle_requests.py` 四个用例：
+修正后的 `scripts/validation/lifecycle_requests.py` 四个用例：
 
 | 用例 | 实际 scheduler 状态 | 终止原因 | 保存输入行/层记录 |
 |---|---|---|---:|
@@ -69,9 +69,11 @@ cancelled 在当前文件中表示引擎 abort；仅凭这个事件不能断言�
 MOE_TRACE_REFERENCE_DIR；执行：
 
 ```bash
-conda run -n moe-vllm python scripts/lifecycle_requests.py
+conda run -n moe-vllm python scripts/validation/lifecycle_requests.py \
+  --url http://127.0.0.1:18001/v1/completions \
+  --model /home/czx/code/moe-routing/models/granite-3.1-1b-a400m-instruct
 # 请求完成后正常停止自己启动的测试服务
-conda run -n moe-vllm python scripts/verify_lifecycle.py \
+conda run -n moe-vllm python scripts/validation/verify_lifecycle.py \
   /home/czx/code/moe-routing/outputs/<run_id> \
   /tmp/moe-trace-lifecycle-client.json \
   --output /tmp/lifecycle-result.json

@@ -5,7 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from moe_trace import environment as env
+from moe_trace.setup import manager as env
+
+
+def test_direct_proxy_policy_is_explicit_and_does_not_mutate_shell(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "socks5://localhost:1234")
+    monkeypatch.setattr(env, "_disable_proxy", False)
+    assert "HTTPS_PROXY" in env.clean_environment()
+    monkeypatch.setattr(env, "_disable_proxy", True)
+    assert "HTTPS_PROXY" not in env.clean_environment()
+    import os
+    assert os.environ["HTTPS_PROXY"] == "socks5://localhost:1234"
 
 
 @pytest.fixture
@@ -76,6 +86,7 @@ def test_existing_prefix_rejected(tmp_path):
 def test_new_plan(version, tmp_path):
     plan = env.build_plan("new", version, tmp_path, [], conda="conda", target=["--name", "fresh"])
     assert f"python={env.PROFILES[version]['python']}" in plan["commands"][0]
+    assert "pysocks" in plan["commands"][0]
     assert f"vllm=={version}" in plan["commands"][1]
     assert "--only-binary=:all:" in plan["commands"][1]
     assert all("serve" not in command for command in plan["commands"])

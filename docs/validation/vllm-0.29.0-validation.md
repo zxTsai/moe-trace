@@ -20,7 +20,7 @@
   `--distributed-executor-backend uni --shutdown-timeout 30`
   `--max-model-len 1024 --max-num-seqs 8 --max-num-batched-tokens 64`
   `--gpu-memory-utilization 0.65`，测试端口 18001。
-- 开启 token ID 与路由权重。配置：`configs/vllm-0.29.0-validation.yaml`。
+- 开启 token ID 与路由权重。配置：`configs/validation/reference-vllm-0.29.0.yaml`。
 
 ## 完整运行证据
 
@@ -98,4 +98,4 @@ hooks 无操作、权重参考损坏检测和既有公共存储/生命周期回�
 - 其他模型、monolithic 路由、V2 runner、异步调度、重算/抢占、
   speculative、prefix cache、多卡、微批和流式续接；当前明确拒绝或不支持。
 
-复现启动、补丁校验及撤销步骤见 [新版补丁说明](../patches/vllm/0.29.0/README.md)。
+复现启动、补丁校验及撤销步骤见 [新版补丁说明](../../patches/vllm/0.29.0/README.md)。

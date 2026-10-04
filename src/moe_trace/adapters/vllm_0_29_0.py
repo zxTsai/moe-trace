@@ -184,7 +184,7 @@ def trace_execution(runner, scheduler_output, counts, input_ids, positions):
         _counter += 1
         execution = Execution(session, _counter, f"exec-{_counter:012d}", rows)
         if os.environ.get("MOE_TRACE_REFERENCE_DIR"):
-            from . import verification_0_29_0 as verification
+            from ..validation import vllm_0_29_0 as verification
             verification.install(runner, os.environ["MOE_TRACE_REFERENCE_DIR"])
             reference_token = verification.begin(session.run_id, execution.identity)
         token = _active.set(execution)
@@ -214,6 +214,8 @@ def record_routes(layer_name, topk_ids, topk_weights):
     if not match:
         raise IntegrityError(f"cannot identify original layer: {layer_name}")
     layer = int(match.group(1))
+    if layer not in execution.session.moe_layers:
+        return
     if layer in execution.routes:
         raise IntegrityError(f"duplicate layer execution: {layer}")
     ids = topk_ids.detach().cpu().numpy().astype(np.int32, copy=True)

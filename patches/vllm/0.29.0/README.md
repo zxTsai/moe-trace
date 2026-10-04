@@ -9,12 +9,14 @@ RoutedExperts.forward_modular 消费前。
 
 ## 安全应用（推荐隔离包）
 
-无需重新安装工具或依赖。激活现有 `moe-vllm-0.29.0` 环境后执行：
+无需重新安装 vLLM 或依赖。激活你自己的兼容 0.29.0 环境，在工具仓库根执行：
 
 ```bash
-cd /home/czx/code/moe-routing/code
-python scripts/stage_vllm_029.py \
-  /home/czx/miniconda3/envs/moe-vllm-0.29.0/lib/python3.12/site-packages/vllm
+TRACE_REPO=$(pwd)
+TRACE_MODEL=/absolute/path/to/granite-3.1-1b-a400m-instruct
+cp configs/examples/vllm-0.29.0.yaml trace.yaml
+TRACE_VLLM_PACKAGE=$(python -c 'import importlib.util; print(next(iter(importlib.util.find_spec("vllm").submodule_search_locations)))')
+TRACE_VLLM_OVERLAY=$(python scripts/tools/stage_vllm_029.py "$TRACE_VLLM_PACKAGE")
 ```
 
 脚本输出一个 `/tmp/moe-trace-vllm-029-...` 路径。它先核对
@@ -23,15 +25,15 @@ python scripts/stage_vllm_029.py \
 或不匹配时拒绝应用。记录的上游标识 `g98dff2a81` 是 wheel 提供的短标识，
 不是完整 Git commit；因此使用发行版本加文件摘要锁定基础。
 
-把下面的 `<临时目录>` 替换成实际输出：
+任何检查失败都停止。编辑自己的 `trace.yaml` 指定输出目录，然后加载隔离包：
 
 ```bash
-export PYTHONPATH=<临时目录>:/home/czx/code/moe-routing/code/src
+export PYTHONPATH="$TRACE_VLLM_OVERLAY:$TRACE_REPO/src"
 export VLLM_USE_V2_MODEL_RUNNER=0
 export VLLM_USE_FLASHINFER_SAMPLER=0
-export MOE_TRACE_CONFIG=/home/czx/code/moe-routing/code/configs/vllm-0.29.0-validation.yaml
+export MOE_TRACE_CONFIG="$TRACE_REPO/trace.yaml"
 python -c 'import vllm; print(vllm.__version__, vllm.__file__)'
-vllm serve /home/czx/code/moe-routing/models/granite-3.1-1b-a400m-instruct \
+vllm serve "$TRACE_MODEL" \
   --served-model-name granite-moe --host 127.0.0.1 --port 18001 \
   --dtype bfloat16 --max-model-len 1024 --max-num-seqs 2 \
   --max-num-batched-tokens 1024 --gpu-memory-utilization 0.55 \
@@ -39,8 +41,8 @@ vllm serve /home/czx/code/moe-routing/models/granite-3.1-1b-a400m-instruct \
   --distributed-executor-backend uni --shutdown-timeout 30
 ```
 
-验证配置默认输出到 `/tmp/moe-trace-029-outputs`，开启 token ID 与权重；
-正式使用应复制配置、选择持久输出目录，并按需要关闭可选字段。
+通用示例默认输出到 `./outputs`，开启 token ID、不保存权重；
+请按需要选择持久输出目录并调整可选字段。实验配置另放 `configs/validation/`。
 配置里的 vllm 字段是约束声明，不能替代上述实际启动参数。
 
 `--enable-return-routed-experts` 并非本工具必需；其与本工具同时开启的
@@ -62,5 +64,5 @@ vllm serve /home/czx/code/moe-routing/models/granite-3.1-1b-a400m-instruct \
 撤销时先检查 `git apply --reverse --check`，再 `git apply --reverse`。
 不得覆盖安装目录或用户已改动源码。
 
-`scripts/build_vllm_029_patch.py <原始 vllm 包目录>` 将补丁输出到 stdout，
+`scripts/dev/build_vllm_029_patch.py <原始 vllm 包目录>` 将补丁输出到 stdout，
 用于复查与再生成，不自动写入安装包或仓库。

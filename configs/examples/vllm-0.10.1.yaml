@@ -1,6 +1,6 @@
 trace:
   enabled: true
-  output_root: /home/czx/code/moe-routing/outputs
+  output_root: ./outputs
   phases: [prefill, decode]
   layers: null
   request_labels: null
@@ -18,4 +18,3 @@ vllm:
   tensor_parallel_size: 1
   pipeline_parallel_size: 1
   data_parallel_size: 1
-

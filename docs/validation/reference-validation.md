@@ -61,7 +61,7 @@ chunked 请求在 execution 49/50/51 的 Prefill 区间分别为
 reference 输出目录，启动服务：
 
 ```bash
-MOE_TRACE_CONFIG=/home/czx/code/moe-routing/code/configs/reference-validation.yaml \
+MOE_TRACE_CONFIG=/home/czx/code/moe-routing/code/configs/validation/reference-vllm-0.10.1.yaml \
 MOE_TRACE_REFERENCE_DIR=/tmp/moe-trace-reference-new-run \
 conda run --no-capture-output -n moe-vllm vllm serve \
   /home/czx/code/moe-routing/models/granite-3.1-1b-a400m-instruct \
@@ -70,11 +70,18 @@ conda run --no-capture-output -n moe-vllm vllm serve \
   --gpu-memory-utilization 0.65
 ```
 
-在另一终端执行 `conda run -n moe-vllm python scripts/reference_requests.py`。
+在另一终端执行（脚本现已参数化，按该历史服务显式传入端口和模型）：
+
+```bash
+conda run -n moe-vllm python scripts/validation/reference_requests.py \
+  --url http://127.0.0.1:18001/v1/completions \
+  --model /home/czx/code/moe-routing/models/granite-3.1-1b-a400m-instruct
+```
+
 请求结束后正常停止自己启动的服务，再执行：
 
 ```bash
-conda run -n moe-vllm python scripts/verify_reference.py \
+conda run -n moe-vllm python scripts/validation/verify_reference.py \
   /home/czx/code/moe-routing/outputs/<run_id> \
   /tmp/moe-trace-reference-new-run/reference.jsonl \
   --output /tmp/reference-result.json

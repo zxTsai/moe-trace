@@ -1,9 +1,12 @@
 """Regenerate the minimal patch from unmodified installed 0.29.0 sources."""
 import difflib
+import argparse
 import sys
 from pathlib import Path
 
-root = Path(sys.argv[1])
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("package", type=Path, help="unmodified installed vLLM package directory")
+root = parser.parse_args().package
 edits = {
     "v1/engine/core.py": [(
         "        # Exit when no work remaining\n        if not self.has_work():\n",

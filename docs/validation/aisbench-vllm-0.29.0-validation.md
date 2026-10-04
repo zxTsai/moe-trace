@@ -12,7 +12,7 @@
 max-num-batched-tokens=1024、gpu-memory-utilization=0.55、eager、无前缀缓存。
 不启用 enable-return-routed-experts。额外明确同步 uni 和 shutdown-timeout=30。
 环境变量 VLLM_USE_V2_MODEL_RUNNER=0、VLLM_USE_FLASHINFER_SAMPLER=0。
-采集配置：`configs/aisbench-vllm-0.29.0.yaml`；保存 token ID，不保存权重。
+采集配置：`configs/validation/aisbench-vllm-0.29.0.yaml`；保存 token ID，不保存权重。
 
 压测在 `/home/czx/code/aisbench` 目录执行：
 
@@ -63,7 +63,7 @@ Decode 输入少于生成数：2,526 - 20 = 2,506，每个请求最后一个输�
 内部请求 ID 与 aisbench 数据项 UUID 是不同标识，目前不能据此声称已建立
 逐 GSM8K 样本到内部请求的显式映射。按内部请求和执行轮次分析不受影响。
 
-完整性与导出校验使用 `moe_trace.cli validate` 以及 `scripts/verify_exports.py`。
+完整性与导出校验使用 `moe_trace.cli validate` 以及 `scripts/validation/verify_exports.py`。
 两项均通过：143,736 条 JSON 明细与原始记录相同；1,536 行 CSV 计数
 与原始数组重算相同，总计 1,149,888 次选择，包含 1 行零计数。
 按指定执行轮次进一步导出专家分布示例（输出选择新文件，避免覆盖）：
