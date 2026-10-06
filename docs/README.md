@@ -7,6 +7,7 @@
 - [环境准备](guides/environment-setup.md)：版本检测、Conda 隔离、安装确认、失败处理。
 - [完整使用](guides/usage.md)：手动接入、配置、字段、分析、AISBench 与当前限制。
 - [开发指南](guides/development.md)：目录边界、测试、脚本参数和旧路径迁移。
+- [Ascend CPU 开发环境](guides/ascend-cpu-development.md)：独立测试环境及 CPU / A3 验证边界。
 - [配置说明](../configs/README.md)与[脚本说明](../scripts/README.md)。
 
 ## 需求与设计
@@ -14,6 +15,7 @@
 - [需求和操作边界](requirements.md)：原始开发约定。
 - [公共采集及数据格式](design/design.md)：输入行、执行关联、分片和校验。
 - [0.29.0 版本接入](design/vllm-0.29.0-design.md)。
+- [Ascend 0.23.0 CPU 适配](design/ascend-vllm-0.23.0-design.md)：源码基线、hook、限制和验收边界。
 - [环境准备设计](design/environment-setup-design.md)。
 - [仓库结构重构设计](design/repository-refactor-design.md)。
 - 补丁：[0.10.1](../patches/vllm/0.10.1/README.md)、[0.29.0](../patches/vllm/0.29.0/README.md)。

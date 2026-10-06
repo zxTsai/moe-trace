@@ -16,6 +16,12 @@ Instruct、V1/uni/eager、TP/PP/DP=1、无前缀缓存和投机解码。
 0.29.0 还要求 V1 model runner、关闭异步调度和正数停机超时。
 其他模型、多卡、Ascend、CUDA Graph 等不在支持承诺内。
 
+Ascend 开发分支新增 **vLLM + vLLM Ascend 0.23.0 CPU 验证功能**：真实 CPU 张量、
+模拟并发请求、固定源码 Python hook 和独立 consumer 对照。
+**尚未完成 A3/NPU 验收，不能用于声称 Ascend 推理已支持。**
+CPU 操作见[开发与验证指南](docs/guides/ascend-cpu-development.md)，
+接入边界见[适配设计](docs/design/ascend-vllm-0.23.0-design.md)。
+
 **实验版，尚未完成全部可靠性验收。** 双版本真实采集、AISBench 并发、
 独立消费探针对照、取消、关闭采集、层/阶段过滤和导出已有验证。
 整体长期内存仍会随历史索引增长；全新环境在线安装因网络中断未通过，不能据此用于生产。
@@ -106,7 +112,7 @@ JSON/CSV 覆盖指定导出文件；原始 UUID 目录不覆盖、不自动清�
 src/moe_trace/
 ├── adapters/       # 版本接入；补丁导入路径稳定
 ├── setup/          # 标准库检测、安装、隔离补丁
-├── validation/     # 可选独立 GPU 参考探针
+├── validation/     # 独立 GPU 参考探针与 Ascend CPU 验证
 └── *.py            # 公共采集、存储、读取、分析和 CLI
 scripts/
 ├── prepare_environment.py  # 用户无依赖入口

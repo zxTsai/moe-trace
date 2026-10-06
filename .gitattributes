@@ -1,0 +1,3 @@
+# Unified diff context lines intentionally contain a leading space.
+# Validate patch application and Python syntax instead of flagging blank context lines.
+patches/**/*.patch -whitespace

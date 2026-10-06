@@ -40,7 +40,8 @@ class TraceSession:
     def __init__(self, config: TraceConfig, *, model: dict[str, Any],
                  moe_layers: Iterable[int], experts_per_layer: dict[int, int],
                  top_k: int, framework: dict[str, Any] | None = None,
-                 run_id: str | None = None, rank_id: int = 0):
+                 run_id: str | None = None, rank_id: int = 0,
+                 expert_weight_semantics: str | None = None):
         if not config.enabled:
             raise ValueError("TraceSession requires trace.enabled=true")
         self.config = config
@@ -83,7 +84,8 @@ class TraceSession:
             "top_k": self.top_k, "config": config.to_dict(),
             "request_lifecycle_required": True,
             "expert_weight_semantics": (
-                "FusedMoE select_experts output consumed by expert kernel; normalized"
+                expert_weight_semantics
+                or "FusedMoE select_experts output consumed by expert kernel; normalized"
                 if config.save_expert_weights else None),
         }
         atomic_json(self.run_dir / "metadata.json", metadata)

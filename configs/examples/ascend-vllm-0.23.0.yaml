@@ -1,0 +1,16 @@
+# Experimental: CPU verified only. Real A3 acceptance is pending.
+# Not supported by the NVIDIA environment installation wizard.
+trace:
+  enabled: false
+  output_root: ./outputs
+  save_token_ids: false
+  save_expert_weights: false
+  buffer_records: 8192
+  shard_records: 4096
+vllm:
+  enforce_eager: true
+  enable_prefix_caching: false
+  async_scheduling: false
+  tensor_parallel_size: 1
+  pipeline_parallel_size: 1
+  data_parallel_size: 1

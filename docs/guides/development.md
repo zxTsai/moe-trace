@@ -6,8 +6,11 @@
 版本 adapter 只负责从真实 runner/路由消费链映射输入与结果；补丁仍导入
 `moe_trace.adapters.vllm_0_10_1` 或 `vllm_0_29_0`，不能混用。
 `setup/` 是标准库环境管理，bootstrap 不导入需要 NumPy/PyYAML 的包顶层。
-`validation/` 只放独立参考探针，通过 `MOE_TRACE_REFERENCE_DIR` 显式启用，
-常规采集不默认加载。不要用探针数据代替真实采集器数据。
+`validation/` 放独立参考探针和 CPU 模拟验证器。GPU 探针通过
+`MOE_TRACE_REFERENCE_DIR` 显式启用；Ascend CPU 验证使用独立脚本，常规采集不加载。
+不要用模拟/探针数据代替真实采集器数据。
+Ascend 开发见[CPU 验证指南](ascend-cpu-development.md)，独立 adapter 为
+`ascend_vllm_0_23_0`，补丁同时涉及两个 Python 包。
 
 ## 本地回归
 

@@ -1,0 +1,16 @@
+{
+  "base_commits": {
+    "vllm": "0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665",
+    "vllm_ascend": "5cb98caaadeff42b5b62b996e34bb2aaa29d20fd"
+  },
+  "sha256": {
+    "vllm/v1/core/sched/scheduler.py": "9ae1491f57a6294e32416b93ef2ea68107fa0d65c3a4d7f745f1261012f735e9",
+    "vllm_ascend/worker/model_runner_v1.py": "94d75dbeb5d23ab5b383cdc69114167392b967994bb21342cf748b733ba9a968",
+    "vllm_ascend/ops/fused_moe/fused_moe.py": "a6bd913240ac452afafe3e04ca0d3e7bdb0f3d3fd2d63326e487e66d67ec4ecb"
+  },
+  "patched_sha256": {
+    "vllm/v1/core/sched/scheduler.py": "2853b18b907a8ef119d9f1756fe6eb6062b05fad62ca03a01fe1d918c6eec05b",
+    "vllm_ascend/worker/model_runner_v1.py": "bc900ad32801199d49196d1d517bf4cc5bc28e18e12223beabdc96f4d8ac44b2",
+    "vllm_ascend/ops/fused_moe/fused_moe.py": "ddb5e7295fdf4d6f369aa7e91480681314629a58a7457046732a13089b23e281"
+  }
+}

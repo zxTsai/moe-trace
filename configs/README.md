@@ -5,6 +5,7 @@
 | `examples/default.yaml` | 完整参数模板，默认关闭采集 |
 | `examples/vllm-0.10.1.yaml` | 0.10.1 用户示例 |
 | `examples/vllm-0.29.0.yaml` | 0.29.0 用户示例 |
+| `examples/ascend-vllm-0.23.0.yaml` | Ascend 实验配置，默认关闭，CPU 验证不等于 A3 验收 |
 | `validation/` | 历史实验配置，可能包含维护者机器路径，不用于通用快速开始 |
 
 用户示例输出到 `./outputs`，相对于服务启动目录。可复制到仓库根 `trace.yaml`

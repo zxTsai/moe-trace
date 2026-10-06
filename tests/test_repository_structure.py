@@ -28,7 +28,7 @@ def test_local_documentation_links_exist():
     assert not broken, "\n".join(broken)
 
 
-@pytest.mark.parametrize("name", ["default", "vllm-0.10.1", "vllm-0.29.0"])
+@pytest.mark.parametrize("name", ["default", "vllm-0.10.1", "vllm-0.29.0", "ascend-vllm-0.23.0"])
 def test_examples_are_portable(name):
     config = load_config(ROOT / "configs/examples" / f"{name}.yaml")
     assert not config.output_root.is_absolute()

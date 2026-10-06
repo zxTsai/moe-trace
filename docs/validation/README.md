@@ -9,6 +9,8 @@ AISBench、关闭采集、过滤、小分片和受控写失败测试。
 全新环境在线安装已实际尝试，但因网络超时失败，不能标记完成；缓存及临时环境保留。
 
 结构重构后的回归见[重构验证记录](repository-refactor-validation.md)。
+Ascend feature 的[CPU 验证报告](ascend-cpu-validation.md)只覆盖 CPU 模拟及固定源码
+Python 接入点；A3/NPU 验收待完成，与 NVIDIA 真实服务报告分开。
 
 ## 按版本与场景查找
 
@@ -22,6 +24,7 @@ AISBench、关闭采集、过滤、小分片和受控写失败测试。
 | 0.29.0 原 AISBench 实验 | [20 请求、2 并发](aisbench-vllm-0.29.0-validation.md) |
 | main 整合 | [整合回归](main-integration-validation.md) |
 | main 真实服务 | [8 请求真实执行](main-live-validation-2026-10-03.md) |
+| Ascend 0.23.0 CPU | [CPU 采集与固定源码接入](ascend-cpu-validation.md) |
 | 扩展验证 | [双版本、4 并发 AISBench、过滤等](full-validation-2026-10-03.md) |
 
 JSON 小规模摘要与报告放在同一目录。原始轨迹、NPZ、大型 JSON 和压测报告
