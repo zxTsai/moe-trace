@@ -1,0 +1,34 @@
+--- a/vllm_ascend/worker/model_runner_v1.py
++++ b/vllm_ascend/worker/model_runner_v1.py
+@@ -3198,6 +3198,8 @@
+         assert self.model is not None
+         forward_context = get_forward_context()
+         assert forward_context is not None
++        from moe_trace.adapters.ascend_v41_source import verify_forward
++        verify_forward(input_ids, positions, forward_context.cudagraph_runtime_mode)
+         if forward_context.cudagraph_runtime_mode == CUDAGraphMode.FULL:
+             if hasattr(self.model, "set_attn_backend"):
+                 self.model.set_attn_backend(self.attn_backend)
+--- a/vllm_ascend/ops/fused_moe/routed_experts.py
++++ b/vllm_ascend/ops/fused_moe/routed_experts.py
+@@ -621,6 +621,9 @@
+             router_logits=router_logits,
+             input_ids=input_ids,
+         )
++        from moe_trace.adapters.ascend_v41_source import logical_routes
++        logical_routes(self, topk_ids, topk_weights,
++                       enable_force_load_balance or get_ascend_config().enable_force_eplb)
+         if self.log2phy is not None:
+             topk_ids = self.log2phy[topk_ids]
+ 
+--- a/vllm_ascend/quantization/methods/w8a8/w8a8_dynamic.py
++++ b/vllm_ascend/quantization/methods/w8a8/w8a8_dynamic.py
+@@ -194,6 +194,8 @@
+         lora_context = getattr(layer, "_ascend_moe_lora_context", None)
+         assert topk_ids is not None
+         assert topk_weights is not None
++        from moe_trace.adapters.ascend_v41_source import consumer_routes
++        consumer_routes(layer, topk_ids, topk_weights)
+ 
+         activation = getattr(layer, "activation", "silu")
+         moe_comm_method = _EXTRA_CTX.moe_comm_method

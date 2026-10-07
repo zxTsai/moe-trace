@@ -1,0 +1,13 @@
+{
+  "validation_level": "cpu_source_hooks",
+  "npu_verified": false,
+  "base_commits": {
+    "vllm": "ced6857afa0ea7b2e3f0846a62e1394e90f15607",
+    "vllm_ascend": "0e181fc85fff24db10e5f92f10319c1913e6e9c5"
+  },
+  "patched_sha256": {
+    "vllm_ascend/worker/model_runner_v1.py": "23a19c71b3147c30cb2c1dc7994ea4700030f262380e6842f380b11ea98c0983",
+    "vllm_ascend/ops/fused_moe/routed_experts.py": "b4026e26740da18099bd555862c68375aa2b170d5050c9a5bdbe0d9b95e9d5a5",
+    "vllm_ascend/quantization/methods/w8a8/w8a8_dynamic.py": "1f23a71f0c9118f5d36fe199cd258acb879a9920a143ffe4bfe2e2b5c89f787c"
+  }
+}
