@@ -120,3 +120,25 @@ def test_draft_input_need_not_have_output_candidate_identity():
     row = replace(fixture()[0].row, kind="dspark_draft",
                   candidate_round=None, candidate_node=None)
     assert row.candidate_node is None
+
+
+def test_mask_is_not_fabricated_token_zero():
+    row = replace(fixture()[0].row, kind="dspark_draft", input_role="mask", token_id=None)
+    assert row.token_id is None
+    with pytest.raises(IntegrityError, match="mask"):
+        replace(row, token_id=0)
+    with pytest.raises(IntegrityError, match="mask"):
+        replace(row, kind="target_verify")
+
+
+def test_verification_seed_is_not_a_candidate():
+    row = replace(fixture()[0].row, input_role="seed", candidate_round=None, candidate_node=None)
+    assert annotate_candidates([replace(fixture()[0], row=row)], []) == [
+        (replace(fixture()[0], row=row), None)]
+
+
+def test_non_mask_missing_token_and_unknown_role_fail():
+    with pytest.raises(IntegrityError):
+        replace(fixture()[0].row, token_id=None)
+    with pytest.raises(IntegrityError):
+        replace(fixture()[0].row, input_role="padding")

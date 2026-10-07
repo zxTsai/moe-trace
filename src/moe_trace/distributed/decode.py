@@ -49,21 +49,30 @@ class DecodeRow:
     local_request: str
     input_row: int
     position: int
-    token_id: int
+    token_id: int | None
     kind: str
     candidate_round: str | None = None
     candidate_node: str | None = None
+    input_role: str = "sequence"
 
     def __post_init__(self):
         for name in ("source_engine", "execution", "global_request", "local_request"):
             _text(getattr(self, name), name)
-        for name in ("scheduler_step", "input_row", "position", "token_id"):
+        for name in ("scheduler_step", "input_row", "position"):
             _integer(getattr(self, name), name)
+        if self.input_role not in {"sequence", "seed", "context", "mask"}:
+            raise IntegrityError("unsupported input role")
+        if self.input_role == "mask":
+            if self.kind != "dspark_draft" or self.token_id is not None:
+                raise IntegrityError("draft mask is not an ordinary vocabulary token")
+        else:
+            _integer(self.token_id, "token_id")
         if self.kind not in {"target_decode", "target_verify", "dspark_draft"}:
             raise IntegrityError("unsupported execution kind")
         if (self.candidate_round is None) != (self.candidate_node is None):
             raise IntegrityError("candidate round and node must appear together")
-        if self.kind == "target_verify" and self.candidate_node is None:
+        if (self.kind == "target_verify" and self.candidate_node is None
+                and self.input_role != "seed"):
             raise IntegrityError("verified candidate needs explicit identity")
         if self.kind == "target_decode" and self.candidate_node is not None:
             raise IntegrityError("ordinary decode cannot label a speculative candidate")
@@ -175,7 +184,7 @@ def annotate_candidates(routes, results):
         result_map[result.key] = result.accepted
     known = {(r.row.global_request, r.row.source_engine,
               r.row.candidate_round, r.row.candidate_node) for r in routes
-             if r.row.kind == "target_verify"}
+             if r.row.kind == "target_verify" and r.row.candidate_node is not None}
     if set(result_map) - known:
         raise IntegrityError("candidate result has no target verification route")
     return [(r, result_map.get((r.row.global_request, r.row.source_engine,
