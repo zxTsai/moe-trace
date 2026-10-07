@@ -11,6 +11,8 @@ AISBench、关闭采集、过滤、小分片和受控写失败测试。
 结构重构后的回归见[重构验证记录](repository-refactor-validation.md)。
 Ascend feature 的[CPU 验证报告](ascend-cpu-validation.md)只覆盖 CPU 模拟及固定源码
 Python 接入点；A3/NPU 验收待完成，与 NVIDIA 真实服务报告分开。
+V4.1 分布式开发阶段见[Decode CPU 契约验证](distributed-decode-cpu-validation.md)，
+不能据此宣称 PD、EP 或 ACL 图执行已经接入。
 
 ## 按版本与场景查找
 

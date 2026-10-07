@@ -10,8 +10,10 @@ FULL_DECODE_ONLY，draft eager。仅采集 D 侧，不修改 P 路由或服务�
 本设计不是硬件支持声明。0.23.0 Granite adapter 保持原有限制。
 新功能使用独立 schema，不将 DSpark 候选硬塞入现有 InputRow/TraceSession。
 官方 HEAD 调查快照：`0e181fc85fff24db10e5f92f10319c1913e6e9c5`。
-该快照是否含目标模型、对应 vLLM commit、部署镜像 digest 尚待源码确认；
-不得仅凭文档或 HEAD 将它登记为可运行基线。
+已确认该快照包含 V4.1 与 DSpark 模型。其 `.github/vllm-main-verified.commit`
+指定 vLLM `ced6857afa0ea7b2e3f0846a62e1394e90f15607`，已检出调查。
+[源码锁](ascend-v41-source-lock.json)固定 10 个文件哈希。部署镜像 digest 尚未确认；
+该锁是调查基线，不是可运行或已验收基线。
 
 ## 关联与计数
 
@@ -52,3 +54,24 @@ worker 分片不覆盖。schema 及 CLI 将在存储实现时另行确认。
 6. 开关采集前后生成结果、吞吐、延迟、内存比较。
 
 每个关卡独立提交。不发布未经硬件验收的安装 patch，不合 main、不推远程。
+
+## 当前实现及源码证据
+
+- `distributed/decode.py`：不可变 worker/input/route/result；TP 副本一致性与 owner 去重。
+  DSpark mask 用 token_id=null 与 input_role=mask 表示，不伪装为词表 token 0。
+  target 验证 seed 可以没有候选身份，draft 输入不等同于其预测候选。
+- `distributed/storage.py`：schema `distributed-decode-experimental-1`，worker JSONL 分片，
+  缓冲同时限制条数与序列化字节数。声明有效输入及预期 observers；检查全部 worker、
+  完成标记、哈希、输入/层覆盖、副本和候选结果。离线 merge 仍全量加载内存。
+  尚无请求终止事件、物理 dispatch 表或真实服务接入，完整性仅指声明的 CPU 契约。
+- `distributed/replay.py`：静态张量、设备 copy 与 generation 原型。CPU 模拟验证完成
+  事件等待、padding 排除、冻结输入、不重复读旧数据。每个缓冲强制 drain 后才能复用；
+  并发多槽/真实图绑定/跨流同步尚未实现。源码中图重放直接调用 NPUGraph.replay，
+  Python selector 不会随每次 replay 重新调用；必须把采集 copy 录入图才可使用。
+- 真实 AscendRoutedExperts._select_experts 的 CPU 方法测试显示逻辑 `[3,1]` 经
+  log2phy 变为 `[2,3]`，mix_placement 后增加 shared `[4]`；W8A8 apply 的独立
+  consumer 收到 `[2,3,4]`。因此计划至少两个采集点：router 输出和最终 dispatch 输入。
+- input 准备与 prepare/SP 路径可能重排/补齐，不能将 scheduler 字典顺序直接
+  当作 selector 的输入顺序；物理执行 worker 也不等同于逻辑 input owner。
+- 拒绝采样输出包含 recovered/bonus token，不能用非 -1 输出个数或 token 相等
+  直接判定每个候选接受。须适配实际验证 kernel/metadata 结果，保留执行快照。
