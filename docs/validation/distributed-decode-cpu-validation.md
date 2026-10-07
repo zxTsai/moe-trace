@@ -48,7 +48,25 @@ python -m pytest -o addopts='' -q
 
 ## 下一关卡
 
-目前没有 V4.1 安装 patch 或生产 adapter。需要将经过 KV 接收、SP/prepare 重排的
+目前没有 V4.1 生产安装 patch 或生产 adapter。需要将经过 KV 接收、SP/prepare 重排的
 有效输入映射到 router，补齐候选结果、请求终止和物理 dispatch；再在 A3 验证
 量化 eager、图重放、多流、异步和完整 PD/DSpark。CPU 契约成功仅表示声明数据
 一致，不证明声明覆盖了全部真实执行，更不证明 NPU 侧数据正确。
+
+## 固定源码 CPU hook 接入（追加验证）
+
+后续已加入 [CPU hook patch](../../patches/ascend/deepseek-v41-cpu/README.md)。
+修改后真实 Runner `_model_forward`、selector `_select_experts` 和 W8A8 `apply`
+在 CPU mock 上全部执行，不再只把预设 Route 送入存储。
+输入核对来自实际 forward 张量；hook 读取 selector 输出与 consumer 输入。
+模型/router 设备实现和专家计算仍为 mock，没有加载 DeepSeek 权重或运行服务。
+
+- `cpu_source_hooks`：3 个修改后的真实方法，4 条逻辑路由、8 次选择，对照 passed。
+- 实际 logical `[3,1]`；consumer 在映射与 shared 追加后收到 `[2,3,4]`。
+- 原始固定源码保持不变，patch 再生成逐字一致；副本 manifest 与固定哈希核对。
+- 图、无上下文启用、非法 token、缺 consumer、异常上下文清理等测试。
+- 最终全量回归 **258 passed in 6.78s**，无 skip；原有 250 项阶段结果保留。
+
+报告：outputs/v41-source-cpu/source-validation.json；明细 details.json 与
+expert-counts.csv；实际 consumer 入参 consumer-reference.json。全部忽略提交。
+报告显式保存 model_loaded=false、full_service_run=false、npu_verified=false。

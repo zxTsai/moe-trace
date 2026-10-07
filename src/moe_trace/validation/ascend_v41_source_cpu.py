@@ -34,8 +34,10 @@ def run_validation(overlay, output):
     atomic_json(report_path, {"state": "running", "npu_verified": False})
     try:
         manifest = json.loads((overlay / "source-hooks.json").read_text())
-        if manifest["validation_level"] != "cpu_source_hooks":
-            raise IntegrityError("not a CPU source-hook copy")
+        trusted_path = Path(__file__).resolve().parents[3] / "patches/ascend/deepseek-v41-cpu/source-hooks.json"
+        trusted = json.loads(trusted_path.read_text())
+        if manifest != trusted:
+            raise IntegrityError("not the pinned CPU source-hook copy")
         for path, expected in manifest["patched_sha256"].items():
             if hashlib.sha256((overlay / path).read_bytes()).hexdigest() != expected:
                 raise IntegrityError("modified source-hook copy")

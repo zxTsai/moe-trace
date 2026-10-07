@@ -71,6 +71,9 @@ def test_patched_source_methods_export_routes(tmp_path):
     spec.loader.exec_module(module)
     before = (Path(ascend) / "vllm_ascend/ops/fused_moe/routed_experts.py").read_bytes()
     overlay = module.stage(vllm, ascend, tmp_path / "overlays")
+    assert (overlay / "hooks.patch").read_text() == (ROOT / "patches/ascend/deepseek-v41-cpu/0001-source-hooks.patch").read_text()
+    assert json.loads((overlay / "source-hooks.json").read_text()) == json.loads(
+        (ROOT / "patches/ascend/deepseek-v41-cpu/source-hooks.json").read_text())
     assert (Path(ascend) / "vllm_ascend/ops/fused_moe/routed_experts.py").read_bytes() == before
     report = run_validation(overlay, tmp_path / "validation")
     assert report["patched_methods_executed"] == 3

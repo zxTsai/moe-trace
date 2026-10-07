@@ -109,7 +109,7 @@ JSON/CSV 覆盖指定导出文件；原始 UUID 目录不覆盖、不自动清�
 ## DeepSeek V4.1 PD Decode 开发状态
 
 `feat/ascend-deepseek-v41-decode` 正在开发多机 A3、PD、EP、DSpark 的 D 侧采集。
-目前只有 CPU 事件契约、worker 分片/汇总、静态路由缓冲原型和固定源码调查；
+目前包含 CPU 事件契约、worker 分片/汇总、静态缓冲原型和固定源码 CPU hook；
 **没有可用于该部署的服务安装 patch，尚未接入真实 ACL 图重放或完成 A3 验收。**
 不要使用下面的 0.23.0 Granite 安装步骤部署 V4.1。
 操作与结果示例见[分布式 Decode CPU 验证指南](docs/guides/distributed-decode-cpu.md)。

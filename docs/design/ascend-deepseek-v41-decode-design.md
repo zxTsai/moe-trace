@@ -66,7 +66,7 @@ worker 分片不覆盖。schema 及 CLI 将在存储实现时另行确认。
   尚无请求终止事件、物理 dispatch 表或真实服务接入，完整性仅指声明的 CPU 契约。
 - `distributed/replay.py`：静态张量、设备 copy 与 generation 原型。CPU 模拟验证完成
   事件等待、padding 排除、冻结输入、不重复读旧数据。每个缓冲强制 drain 后才能复用；
-  并发多槽/真实图绑定/跨流同步尚未实现。源码中图重放直接调用 NPUGraph.replay，
+并发多槽/真实图绑定/跨流同步尚未实现。源码中图重放直接调用 NPUGraph.replay，
   Python selector 不会随每次 replay 重新调用；必须把采集 copy 录入图才可使用。
 - 真实 AscendRoutedExperts._select_experts 的 CPU 方法测试显示逻辑 `[3,1]` 经
   log2phy 变为 `[2,3]`，mix_placement 后增加 shared `[4]`；W8A8 apply 的独立
@@ -75,3 +75,8 @@ worker 分片不覆盖。schema 及 CLI 将在存储实现时另行确认。
   当作 selector 的输入顺序；物理执行 worker 也不等同于逻辑 input owner。
 - 拒绝采样输出包含 recovered/bonus token，不能用非 -1 输出个数或 token 相等
   直接判定每个候选接受。须适配实际验证 kernel/metadata 结果，保留执行快照。
+
+已增加独立 `ascend_v41_source` CPU hook 与可机械再生成的 patch。Runner 输入检查、
+selector 逻辑选择和 W8A8 consumer 参数在修改后的真实方法中执行。CPU harness
+显式提供不可变绑定，原始源文件不改；当前拒绝设备/图/SP 路径，不能在缺少绑定
+时静默开始采集。报告等级 cpu_source_hooks，仍非完整服务或硬件验收。

@@ -9,7 +9,7 @@
 在已有独立开发环境安装本仓库（不改生产环境、不安装 vLLM/CANN）：
 
 ```bash
-python -m pip install '.[test]'
+python -m pip install -e '.[test]'
 python -m moe_trace.validation.distributed_decode_cpu --output ./outputs/distributed-decode-cpu
 ```
 
@@ -77,8 +77,36 @@ CPU mock 对象运行，不导入 NPU 框架、不加载模型，不能证明模
 
 ## 未完成
 
-真实输入/KV/DSpark 接入、逻辑及物理路由 hook、请求生命周期、部署镜像固定、
+真实服务输入/KV/DSpark 接入、分布式物理 dispatch、请求生命周期、部署镜像固定、
 ACL 图录制/replay、并发多槽与跨流事件、完整 A3 验收及性能比较仍待开发。
 静态缓冲原型仅 CPU 测过，要求前次 drain 才能复用；不是异步生产采集器。
 汇总需全量读取内存，不适合无限时长采集。局部 CPU 成功不表示服务采集已成功。
 worker 缓冲受条数和字节限制，但分片索引随运行增长；尚不承诺无限运行内存有界。
+
+## 固定源码 hook 接入（CPU）
+
+已新增 [CPU hook patch](../../patches/ascend/deepseek-v41-cpu/README.md)，
+不再只是构造路由后测试存储：修改后的真实 `_model_forward`、`_select_experts`、
+W8A8 `apply` 都在 CPU harness 中执行，hook 读取实际调用张量。
+模型、router 的设备实现及专家 kernel 仍由 mock 替代，没有加载模型权重。
+
+```bash
+python -S scripts/tools/stage_ascend_v41_cpu.py \
+  --vllm-root /path/to/pinned-vllm \
+  --ascend-root /path/to/pinned-vllm-ascend \
+  --output-parent ./outputs/v41-source-hooks
+# 将上一步打印的实际目录填入：
+OVERLAY=./outputs/v41-source-hooks/ascend-v41-cpu-实际后缀
+python -m moe_trace.validation.ascend_v41_source_cpu \
+  --overlay "$OVERLAY" --output ./outputs/v41-source-cpu
+```
+
+报告应为 validation_level=cpu_source_hooks、patched_methods_executed=3、
+logical_routes=4、expert_choices=8、comparison=passed，同时
+model_loaded=false、full_service_run=false、npu_verified=false。
+明细和统计分别为 details.json、expert-counts.csv；consumer-reference.json
+保存实际专家 consumer 收到的映射后 IDs/权重，不冒充物理设备负载。
+
+请求 A 输入 41、位置 7，层 20 的实际 logical hook 保存 `[3,1]`；
+映射并追加 shared 后，实际 consumer 收到 `[2,3,4]`。这两个数组分开保存。
+这证明了源码 hook 的 CPU 接入，不证明 A3 图执行；不要将该副本直接部署 PD 服务。
