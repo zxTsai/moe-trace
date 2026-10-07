@@ -1,0 +1,19 @@
+{
+  "validation_level": "source_inventory_only",
+  "base_commits": {
+    "vllm": "ced6857afa0ea7b2e3f0846a62e1394e90f15607",
+    "vllm_ascend": "0e181fc85fff24db10e5f92f10319c1913e6e9c5"
+  },
+  "sha256": {
+    "vllm/v1/spec_decode/metadata.py": "a6696487b3c8823c119f601de81504341bdefefe95bafe673c1f570ab2028da8",
+    "vllm/v1/sample/rejection_sampler.py": "0bb9d224887ccb1355e16199005cc23a4afc6fa75156eca419851b7247d99750",
+    "vllm_ascend/ops/fused_moe/routed_experts.py": "dd8150702f67150db0ca0c93a1e51b69c3a507c3fd491136ff25a5751f4abd64",
+    "vllm_ascend/quantization/methods/w8a8/w8a8_dynamic.py": "8d20efa51edb84c67167adb628d3699968dae88a7c5285566b9ecd6390759537",
+    "vllm_ascend/compilation/acl_graph.py": "8e1c269e331d005f1361acc5cec24402bff7ae39b75e952ea890da7812804955",
+    "vllm_ascend/spec_decode/dspark_proposer.py": "70d216de21875e679d510153ebdb0f0ccf130875a0e644f0673d60b67b6b633c",
+    "vllm_ascend/models/deepseek_v41/model.py": "59d95339c430efeee5293a7f466f87e962d9778308cbd065a5d77bf409c59d5a",
+    "vllm_ascend/models/deepseek_v41/dspark.py": "6dc5c3da6318ed2862acadd9bfd7a174df26d6c70296965e4085a95f4b4e7fee",
+    "vllm_ascend/worker/model_runner_v1.py": "3bb01c153266a5d97f021d814d6ca2b4c60eef48f260adf34c2c33d2e938b6bc",
+    "vllm_ascend/sample/rejection_sampler.py": "bb1d39de851540c16c2dd2b16df60c60a1fc4957cedb88bdce9417efc0d55eda"
+  }
+}
