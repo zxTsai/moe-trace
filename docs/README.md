@@ -8,6 +8,7 @@
 - [完整使用](guides/usage.md)：手动接入、配置、字段、分析、AISBench 与当前限制。
 - [开发指南](guides/development.md)：目录边界、测试、脚本参数和旧路径迁移。
 - [Ascend CPU 开发环境](guides/ascend-cpu-development.md)：独立测试环境及 CPU / A3 验证边界。
+- [Ascend 完整快速开始](guides/ascend-quickstart.md)：官方环境、原服务验证、安装接入、重启采集与结果分析（待 A3 验收）。
 - [配置说明](../configs/README.md)与[脚本说明](../scripts/README.md)。
 
 ## 需求与设计

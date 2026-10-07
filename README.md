@@ -27,7 +27,7 @@ CPU 操作见[开发与验证指南](docs/guides/ascend-cpu-development.md)，
 整体长期内存仍会随历史索引增长；全新环境在线安装因网络中断未通过，不能据此用于生产。
 当前结论见[验证索引](docs/validation/README.md)，历史报告不是最新验收状态。
 
-## 快速开始
+## NVIDIA 快速开始
 
 ### 1. 获取源码
 
@@ -106,6 +106,158 @@ JSON/CSV 覆盖指定导出文件；原始 UUID 目录不覆盖、不自动清�
 校验失败不能当作完整实验。采集记录的是实际输入 forward 的 token；
 最后生成的 token 未再次输入模型时没有下一条路由。
 
+## Ascend 快速开始（实验功能）
+
+当前功能在 `feat/ascend-vllm-0.23.0` 分支，尚未合并 `main`。
+**仅完成 CPU 模拟和固定源码 Python hook 验证，真实 A3/NPU 验收待完成。**
+下列步骤说明独立采集环境的接入方式，不是已经验收的 A3 部署承诺。
+当前 NVIDIA 环境向导不安装 Ascend 环境。
+
+**完整步骤见 [Ascend 快速开始：环境 → 服务 → 采集 → 分析](docs/guides/ascend-quickstart.md)**，
+包含官方 A3 镜像安装、原服务请求验证、工具安装检查、双包加载路径断言、
+重启采集服务、并发请求、正常关闭、轨迹校验及按轮次/请求查看专家分布。
+以下是接入摘要；先跑通原服务，安装后必须重启专用服务，不能热注入正在运行的进程。
+
+### 1. 先准备官方推理环境
+
+按 [vLLM Ascend 官方指南](https://docs.vllm.ai/projects/ascend/zh-cn/latest/getting_started/installation.html)
+在专用容器或隔离环境安装匹配的 `vLLM 0.23.0 + vLLM Ascend 0.23.0` 及配套软件栈，
+先确认未接入采集工具时能够正常推理。不要修改现有生产环境；`latest` 文档会变化，
+应固定具体版本。CPU 开发不需要这套 NPU 环境，见本节末尾。
+当前仅适配 Granite，其 A3 可运行性未验证；原服务不能跑通时先停止，不用其他模型替代后继续。
+
+### 2. 安装 moe-trace 工具包
+
+获取包含 Ascend 功能的本仓库代码，在上述专用环境中、仓库根目录执行：
+
+```bash
+python -m pip install .
+python -m pip check
+moe-trace --help
+python -c 'from moe_trace.adapters import ascend_vllm_0_23_0; print(ascend_vllm_0_23_0.__file__)'
+```
+
+这一步安装我们的 adapter、存储、校验、导出模块及 `moe-trace` 命令，
+运行依赖为 NumPy、PyYAML；**不安装或升级 vLLM、vLLM Ascend、TorchNPU、CANN，
+也不修改它们的源码**。仅安装工具包不会自动启用采集。
+
+### 3. 生成带 hook 的隔离副本
+
+脚本位置：[scripts/tools/stage_ascend_023.py](scripts/tools/stage_ascend_023.py)。
+以下路径是占位符，替换为当前环境的原始 Python 包目录：
+
+```bash
+python scripts/tools/stage_ascend_023.py \
+  --vllm-package /absolute/path/to/site-packages/vllm \
+  --ascend-package /absolute/path/to/site-packages/vllm_ascend \
+  --output-parent ./outputs/ascend-overlays
+```
+
+若不知道安装路径，可在未加载副本的环境中查看：
+
+```bash
+python -c 'import importlib.util; from pathlib import Path; print(Path(importlib.util.find_spec("vllm").origin).parent)'
+python -c 'import importlib.util; from pathlib import Path; print(Path(importlib.util.find_spec("vllm_ascend").origin).parent)'
+```
+
+参数含义：`--vllm-package` 和 `--ascend-package` 指向原包，不是 Git 仓库根目录；
+`--output-parent` 指定副本的父目录。脚本核对接入文件 SHA256、检查补丁锚点和 Python
+语法，然后复制两个包并只修改副本。遇到源码差异或已打补丁时拒绝操作，不覆盖原安装。
+成功后打印新建的唯一目录，例如：
+
+```text
+outputs/ascend-overlays/moe-ascend-023-随机后缀/
+├── vllm/
+└── vllm_ascend/
+```
+
+省略 `--output-parent` 时使用系统临时目录，可能被清理；正式使用建议显式指定持久目录。
+这一步不启动服务，也不产生轨迹。
+
+### 4. 仅让专用采集服务加载副本
+
+将脚本打印的目录填入变量。`PYTHONPATH` 指向**包含两个包的父目录**，
+不是其中的 `vllm/` 或 `vllm_ascend/`：
+
+```bash
+ASCEND_TRACE_OVERLAY=/absolute/path/to/generated/moe-ascend-023-directory
+cp configs/examples/ascend-vllm-0.23.0.yaml ./outputs/trace-ascend.yaml
+# 编辑 trace 配置：enabled: true；output_root: ./outputs/ascend-traces。
+# 测试时可将 save_token_ids、save_expert_weights 都设为 true。
+export PYTHONPATH="$ASCEND_TRACE_OVERLAY${PYTHONPATH:+:$PYTHONPATH}"
+export MOE_TRACE_CONFIG="$PWD/outputs/trace-ascend.yaml"
+export VLLM_USE_V2_MODEL_RUNNER=0
+```
+
+随后在这个专用终端/容器中启动符合 adapter 约束的测试服务：Granite、非量化、
+uni/eager、同步调度、TP/PP/DP/PCP/DCP=1，关闭前缀缓存、投机、EP/EPLB、FlashComm、
+多流及融合 MC2，不同时开启 `--enable-return-routed-experts`。
+这些约束必须由真实服务配置满足，不能只写在采集 YAML 里。
+完整限制见[设计](docs/design/ascend-vllm-0.23.0-design.md)和
+[补丁说明](patches/ascend/0.23.0/README.md)；Granite 在 A3 上的可运行性仍待核验。
+
+此过程不会切换或重启已经运行的服务。不加载副本的服务继续使用原安装；
+恢复原方式时，在未设置这些采集变量的新终端启动服务即可，原代码无须撤销补丁。
+当前没有自动化 Ascend 安装/启动向导，不能将此方式描述为安装后自动生效的纯插件。
+
+### 5. 请求、停机、确认采集生效
+
+加载副本后按[完整快速开始](docs/guides/ascend-quickstart.md#5-重启采集服务并发送请求)
+启动专用服务。在另一个终端发请求，等待成功后在服务终端按一次 Ctrl+C，等待排空：
+
+```bash
+curl --noproxy '*' --fail http://127.0.0.1:8000/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"granite-moe","prompt":"Explain expert routing.","max_tokens":16,"temperature":0}'
+```
+
+选择**本次**原始轨迹目录，不能拿旧成功运行来验证新安装：
+
+```bash
+TRACE_RUN=./outputs/ascend-traces/本次运行ID
+moe-trace validate "$TRACE_RUN"
+moe-trace details "$TRACE_RUN" ./outputs/ascend-details.json --format json
+moe-trace counts "$TRACE_RUN" ./outputs/ascend-expert-counts.csv
+```
+
+成功标准：adapter 为 `ascend_vllm_0_23_0`、记录数大于零、请求有终止事件，
+校验返回 `complete: true` 且 issues 为空。
+“包可导入”“HTTP 200”“轨迹完整”“路由准确”是不同层次，前一项不自动证明后一项；
+真实 NPU 路由准确性仍需硬件独立对照验收。
+
+### 6. 查看开启采集后的结果
+
+`ascend-details.json` 按输入 token / 层记录请求 ID、执行轮次、Prefill/Decode、
+原始 token 位置和 Top-K 专家；启用配置时包含 token ID、权重。
+`ascend-expert-counts.csv` 按阶段、层和专家统计被选择次数，保留零计数。
+
+按轨迹中的实际轮次筛选（不保证第 3 轮必然是并发）：
+
+```bash
+moe-trace details "$TRACE_RUN" ./outputs/ascend-step.json --format json --step-id 3
+moe-trace counts "$TRACE_RUN" ./outputs/ascend-step-counts.csv --step-id 3
+```
+
+同一次执行出现多个内部 request_id 才证明实际并发批处理；包含两种 phase 才证明混合阶段。
+在同层/同阶段内比较各专家 count 占比，不能把选择次数当成耗时或 NPU 使用率，
+也不能把逻辑专家 ID 当成物理设备号。输出字段、独立校验例子和分析口径见
+[完整快速开始的结果分析](docs/guides/ascend-quickstart.md#7-导出结果并分析专家分布)。
+
+### 本机 CPU 验证
+
+无需昇腾卡、Docker、CANN 或模型权重。在已准备的独立 CPU 环境中运行：
+
+```bash
+conda activate moe-ascend-cpu
+python scripts/validation/ascend_cpu.py --output-root ./outputs/ascend-cpu
+```
+
+输出 `details.json`、`consumer_reference.json`、`cpu-validation.json` 及原始
+`traces/<run_id>/`；JSON 覆盖写，原始 UUID 目录保留。
+环境创建和固定源码接入验证见[CPU 开发指南](docs/guides/ascend-cpu-development.md)，
+已有证据见[CPU 验证报告](docs/validation/ascend-cpu-validation.md)。
+普通 CPU 模拟不能代替真实 A3 路由核验或官方 Ascend 端到端测试。
+
 ## 仓库结构
 
 ```text
@@ -127,6 +279,7 @@ docs/
 ├── design/         # 架构和数据格式
 └── validation/     # 历史证据和当前验证索引
 patches/vllm/       # 按版本组织补丁及基础摘要
+patches/ascend/     # Ascend 实验补丁，CPU 已验证，A3 待验收
 tests/              # 自动化回归，不代替真实 GPU 验收
 ```
 
@@ -138,6 +291,7 @@ tests/              # 自动化回归，不代替真实 GPU 验收
 - [文档导航](docs/README.md)
 - [配置、字段、分析与 AISBench 使用](docs/guides/usage.md)
 - [环境准备](docs/guides/environment-setup.md)
+- [Ascend 快速开始：安装、服务、采集、验证和分析](docs/guides/ascend-quickstart.md)
 - [公共采集与数据设计](docs/design/design.md)
 - [需求和操作边界](docs/requirements.md)
 - [验证结果与未完成项](docs/validation/README.md)
