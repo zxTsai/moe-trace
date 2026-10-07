@@ -5,7 +5,7 @@ from pathlib import Path
 import uuid
 
 from ..distributed.decode import Worker, DecodeRow, Route, CandidateResult, expert_counts
-from ..distributed.storage import create_run, WorkerWriter, collect_run, export_run
+from ..distributed.storage import create_run, WorkerWriter, collect_run, export_run, export_counts
 from ..errors import IntegrityError
 from ..io import atomic_json
 
@@ -76,6 +76,7 @@ def run_validation(output):
         if decisions != {("c0", True), ("c1", False)}:
             raise IntegrityError("acceptance association differs from fixture")
         export_run(root, output / "details.json")
+        export_counts(root, output / "expert-counts.csv")
         atomic_json(output / "consumer-reference.json", {"routes": reference})
         result = {"state": "passed", "validation_level": "cpu_contract_only",
                   "npu_verified": False, "run_dir": str(root), "workers": 4,

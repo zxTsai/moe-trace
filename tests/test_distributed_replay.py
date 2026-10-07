@@ -64,6 +64,8 @@ def test_completion_error_fails_buffer():
     with pytest.raises(RuntimeError):
         buffer.drain(NS(synchronize=fail))
     assert buffer.failed
+    with pytest.raises(IntegrityError, match="failed"):
+        buffer.capture_copy(torch.tensor([[0, 1], [1, 2], [2, 3]]), torch.ones(3, 2))
 
 
 def test_warmup_is_not_a_user_route():

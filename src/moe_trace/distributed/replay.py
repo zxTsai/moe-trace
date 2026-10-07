@@ -48,6 +48,8 @@ class ReplayRouteBuffer:
         This does NOT infer logical identities from final physical IDs.
         """
         import torch
+        if self.failed:
+            raise IntegrityError("buffer failed")
         if ids.shape != self.ids.shape or ids.dtype not in (torch.int32, torch.int64):
             raise IntegrityError("captured IDs have wrong shape or dtype")
         if ids.device != self.ids.device:

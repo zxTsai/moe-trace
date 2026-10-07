@@ -188,3 +188,18 @@ def test_declared_replica_missing_fails_even_when_worker_closed(tmp_path):
     WorkerWriter(root, peer.observer).close()
     with pytest.raises(IntegrityError, match="replica observer"):
         collect_run(root)
+
+
+def test_byte_bound_flushes_and_oversized_event_fails(tmp_path):
+    root, route, peer, result = fixtures(tmp_path)
+    writer = WorkerWriter(root, route.owner, shard_records=100, buffer_bytes=1000)
+    writer.declare_execution("target", [route.row])
+    writer.append(route)
+    writer.append(result)
+    assert writer.buffer_size <= 1000
+    assert writer.shards
+    writer.close()
+    writer = WorkerWriter(root, peer.observer, buffer_bytes=1)
+    with pytest.raises(IntegrityError, match="capacity"):
+        writer.append(peer)
+    assert writer.failed

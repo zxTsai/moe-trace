@@ -4,7 +4,7 @@ import json
 import sys
 
 from ..errors import IntegrityError
-from .storage import collect_run, export_run
+from .storage import collect_run, export_run, export_counts
 
 
 def main():
@@ -15,6 +15,9 @@ def main():
     merge = sub.add_parser("merge")
     merge.add_argument("run_dir")
     merge.add_argument("output")
+    counts = sub.add_parser("counts")
+    counts.add_argument("run_dir")
+    counts.add_argument("output")
     args = parser.parse_args()
     try:
         if args.command == "validate":
@@ -22,9 +25,13 @@ def main():
             print(json.dumps({"contract_complete": True, "npu_verified": False,
                               "validation_level": manifest["validation_level"],
                               "logical_routes": len(joined)}, indent=2))
-        else:
+        elif args.command == "merge":
             count = export_run(args.run_dir, args.output)
             print(json.dumps({"logical_routes": count, "output": args.output,
+                              "npu_verified": False}))
+        else:
+            count = export_counts(args.run_dir, args.output)
+            print(json.dumps({"expert_choices": count, "output": args.output,
                               "npu_verified": False}))
     except (IntegrityError, OSError, ValueError, KeyError, TypeError) as exc:
         print(json.dumps({"contract_complete": False, "error": str(exc)}), file=sys.stderr)

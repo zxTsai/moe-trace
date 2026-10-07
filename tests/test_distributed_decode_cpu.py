@@ -1,4 +1,5 @@
 import json
+import csv
 import subprocess
 import sys
 
@@ -28,6 +29,15 @@ def test_independent_fixture_and_cli(tmp_path):
     assert sum(r["candidate_accepted"] is False for r in routes) == 2
     assert any(r["row"]["input_role"] == "mask" and r["row"]["token_id"] is None
                for r in routes)
+    result = subprocess.run([sys.executable, "-m", "moe_trace.distributed.cli", "counts",
+                             report["run_dir"], str(tmp_path / "counts.csv")],
+                            text=True, capture_output=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    with (tmp_path / "counts.csv").open() as stream:
+        counts = list(csv.DictReader(stream))
+    assert sum(int(r["count"]) for r in counts) == 20
+    assert sum(int(r["count"]) for r in counts if r["candidate_decision"] == "rejected") == 4
+    assert any(r["count"] == "0" for r in counts)
 
 
 def test_cli_reports_invalid_input_without_success(tmp_path):

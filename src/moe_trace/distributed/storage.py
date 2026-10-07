@@ -6,7 +6,10 @@ This schema is deliberately separate from the single-worker NPZ format.
 from __future__ import annotations
 
 from dataclasses import asdict
+from collections import Counter
+import csv
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -76,9 +79,11 @@ def decode_route(value):
 class WorkerWriter:
     """Single caller per worker. Does not resume/overwrite existing output."""
 
-    def __init__(self, root, worker, shard_records=4096):
+    def __init__(self, root, worker, shard_records=4096, buffer_bytes=4 * 1024 * 1024):
         if type(shard_records) is not int or shard_records < 1:
             raise IntegrityError("shard_records must be positive")
+        if type(buffer_bytes) is not int or buffer_bytes < 1:
+            raise IntegrityError("buffer_bytes must be positive")
         self.root = Path(root)
         self.manifest, workers = _manifest(self.root)
         if worker not in workers:
@@ -87,6 +92,7 @@ class WorkerWriter:
         self.directory = self.root / f"worker-{workers.index(worker):05d}"
         self.directory.mkdir(exist_ok=False)
         self.limit, self.buffer, self.shards = shard_records, [], []
+        self.byte_limit, self.buffer_size = buffer_bytes, 0
         self.closed = self.failed = False
         self._status("running")
 
@@ -143,7 +149,13 @@ class WorkerWriter:
             raise
 
     def _append_value(self, value):
-        self.buffer.append(value)
+        data = (json.dumps(value, allow_nan=False, sort_keys=True) + "\n").encode("utf-8")
+        if len(data) > self.byte_limit:
+            raise IntegrityError("event exceeds bounded buffer capacity")
+        if self.buffer_size + len(data) > self.byte_limit:
+            self._flush()
+        self.buffer.append(data)
+        self.buffer_size += len(data)
         if len(self.buffer) >= self.limit:
             self._flush()
 
@@ -153,8 +165,7 @@ class WorkerWriter:
         name = f"events-{len(self.shards):06d}.jsonl"
         target = self.directory / name
         pending = self.directory / f".{name}.pending"
-        data = "".join(json.dumps(v, allow_nan=False, sort_keys=True) + "\n"
-                       for v in self.buffer).encode("utf-8")
+        data = b"".join(self.buffer)
         with pending.open("xb") as stream:
             stream.write(data)
             stream.flush()
@@ -166,6 +177,7 @@ class WorkerWriter:
         self.shards.append({"name": name, "records": len(self.buffer),
                             "sha256": hashlib.sha256(data).hexdigest()})
         self.buffer.clear()
+        self.buffer_size = 0
 
     def close(self):
         if self.closed or self.failed:
@@ -294,3 +306,31 @@ def export_run(root, output):
                          "routes": [{**asdict(r), "candidate_accepted": accepted}
                                     for r, accepted in joined]})
     return len(joined)
+
+
+def export_counts(root, output):
+    """Logical choice counts with candidate decisions; not device load."""
+    _, joined = collect_run(root)
+    output = Path(output)
+    if output.resolve().is_relative_to(Path(root).resolve()):
+        raise IntegrityError("analysis output must be outside the input run")
+    counts = Counter()
+    for route, accepted in joined:
+        decision = "accepted" if accepted is True else "rejected" if accepted is False else "not_applicable"
+        for expert in range(route.num_experts):
+            counts.setdefault((route.row.kind, route.model_scope, route.layer, decision, expert), 0)
+        for expert in route.expert_ids:
+            counts[(route.row.kind, route.model_scope, route.layer, decision, expert)] += 1
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream)
+    writer.writerow(["execution_kind", "model_scope", "layer_id", "candidate_decision", "expert_id", "count"])
+    for key, count in sorted(counts.items()):
+        writer.writerow([*key, count])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    pending = output.with_name(f".{output.name}.pending")
+    with pending.open("w", encoding="utf-8", newline="") as target:
+        target.write(stream.getvalue())
+        target.flush()
+        os.fsync(target.fileno())
+    os.replace(pending, output)
+    return sum(counts.values())
