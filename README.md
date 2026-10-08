@@ -300,6 +300,7 @@ tests/              # 自动化回归，不代替真实 GPU 验收
 - [配置、字段、分析与 AISBench 使用](docs/guides/usage.md)
 - [环境准备](docs/guides/environment-setup.md)
 - [Ascend 快速开始：安装、服务、采集、验证和分析](docs/guides/ascend-quickstart.md)
+- [两机 A3 V4.1 1P1D Decode 调试版快速开始（A3 待验收）](docs/guides/ascend-v41-debug-quickstart.md)
 - [公共采集与数据设计](docs/design/design.md)
 - [需求和操作边界](docs/requirements.md)
 - [验证结果与未完成项](docs/validation/README.md)

@@ -28,10 +28,16 @@
 没有来自代理的全局请求映射时明确标注 D-local namespaced，不能宣称 P/D 全局关联。
 所有文件标记 a3_unverified_debug；正常收尾表示声明采集范围存储完整，不是 A3 可靠性证明。
 
-CPU 运行修改后的真实方法，覆盖 DP 不等长、SP padding、TP 切分、混合 Prefill/Decode、
-独立 consumer 对照和故障。NPU 模型、算子、HCCL 与真实 PD 仍须部署实测。
+CPU 执行修改后的真实 forward 接入块，模型/router/consumer 回调使用 mock；
+映射单测覆盖 DP 不等长、SP padding、TP 切分、混合 Prefill/Decode、consumer 对照和故障。
+并非运行整个 GPU execute_model。NPU 模型、算子、HCCL 与真实 PD 仍须部署实测。
 调试模式同步 D2H 有显著性能开销，不用于生产性能结论。
 
 启动前必须检查模型路径、镜像内源码哈希、实际导入副本和 16 个 worker 枚举。
 启动器提供 dry-run，默认不执行服务；显式 --execute 启动自己的子进程并转发停止。
 不下载模型、不升级依赖、不清理其他服务、不推送或合 main。
+
+load_model 后初始化每个 worker 的独立 writer，使空闲 rank 也有可验收的收尾记录。
+汇总器必须验证全部 16 个 worker，即使只有其中部分实际处理请求；所有 worker 均为空
+则拒绝作为成功采集。汇总 JSON 必须写在原始运行目录外，不覆盖现有结果。
+请求生命周期尚未接入，本轮只宣称已声明 worker 执行记录完整，不宣称请求完整。

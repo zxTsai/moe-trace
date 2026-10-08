@@ -13,6 +13,8 @@ Ascend feature 的[CPU 验证报告](ascend-cpu-validation.md)只覆盖 CPU 模�
 Python 接入点；A3/NPU 验收待完成，与 NVIDIA 真实服务报告分开。
 V4.1 分布式开发阶段见[Decode CPU 契约验证](distributed-decode-cpu-validation.md)，
 不能据此宣称 PD、EP 或 ACL 图执行已经接入。
+两机调试版见[V4.1 Debug 开发验证](ascend-v41-debug-validation.md)：启动工具、D-side 接入、
+16-worker 汇总及 274 项 CPU 回归已完成；真实 A3 PD 服务与设备验收仍待执行。
 
 ## 按版本与场景查找
 
