@@ -60,9 +60,12 @@ class DecodeRow:
             _text(getattr(self, name), name)
         for name in ("scheduler_step", "input_row", "position"):
             _integer(getattr(self, name), name)
-        if self.input_role not in {"sequence", "seed", "context", "mask"}:
+        if self.input_role not in {"sequence", "seed", "context", "mask", "redacted"}:
             raise IntegrityError("unsupported input role")
-        if self.input_role == "mask":
+        if self.input_role == "redacted":
+            if self.token_id is not None:
+                raise IntegrityError("redacted token ID must be absent")
+        elif self.input_role == "mask":
             if self.kind != "dspark_draft" or self.token_id is not None:
                 raise IntegrityError("draft mask is not an ordinary vocabulary token")
         else:

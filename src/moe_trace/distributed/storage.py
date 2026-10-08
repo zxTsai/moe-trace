@@ -30,7 +30,7 @@ def _load(path):
 
 def _manifest(root):
     manifest = _load(root / "manifest.json")
-    if manifest.get("schema") != SCHEMA or manifest.get("validation_level") != "cpu_contract_only":
+    if manifest.get("schema") != SCHEMA or manifest.get("validation_level") not in {"cpu_contract_only", "a3_unverified_debug"}:
         raise IntegrityError("unsupported distributed schema/validation level")
     workers = [Worker(**value) for value in manifest["workers"]]
     _check_manifest(workers, manifest["model_layers"])
@@ -53,13 +53,15 @@ def _check_manifest(workers, layers):
             raise IntegrityError("invalid model layer declaration")
 
 
-def create_run(root, workers, model_layers):
+def create_run(root, workers, model_layers, *, validation_level="cpu_contract_only"):
     root = Path(root)
     workers = list(workers)
     _check_manifest(workers, model_layers)
+    if validation_level not in {"cpu_contract_only", "a3_unverified_debug"}:
+        raise IntegrityError("unsupported validation level")
     root.mkdir(parents=True, exist_ok=False)
     atomic_json(root / "manifest.json", {
-        "schema": SCHEMA, "validation_level": "cpu_contract_only",
+        "schema": SCHEMA, "validation_level": validation_level,
         "workers": [asdict(w) for w in workers], "model_layers": model_layers,
     })
     return root
@@ -191,8 +193,12 @@ class WorkerWriter:
             self._status("failed")
             raise
 
+    def fail(self):
+        self.failed = True
+        self._status("failed")
 
-def collect_run(root):
+
+def collect_run(root, *, allow_empty=False):
     """Reject incomplete/corrupt workers and missing layers or candidate results.
 
     Complete means the declared CPU event contract, not NPU execution correctness.
@@ -258,7 +264,7 @@ def collect_run(root):
         if total != status["records"] or {p.name for p in directory.iterdir()} != names:
             raise IntegrityError("worker record total or files mismatch")
     merged = merge_routes(routes)
-    if not merged:
+    if not merged and not allow_empty:
         raise IntegrityError("run has no routes")
     rows = {}
     specs = {}
