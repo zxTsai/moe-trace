@@ -4,6 +4,7 @@
 
 ## 使用指南
 
+- [A3 新手快速使用指南](guides/ascend-a3-beginner-quickstart.md)：两机 V4.1 1P1D 环境、部署、采集和 JSON 查看（待 A3 真机验收）。
 - [环境准备](guides/environment-setup.md)：版本检测、Conda 隔离、安装确认、失败处理。
 - [完整使用](guides/usage.md)：手动接入、配置、字段、分析、AISBench 与当前限制。
 - [开发指南](guides/development.md)：目录边界、测试、脚本参数和旧路径迁移。

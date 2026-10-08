@@ -22,6 +22,11 @@ Ascend 开发分支新增 **vLLM + vLLM Ascend 0.23.0 CPU 验证功能**：真�
 CPU 操作见[开发与验证指南](docs/guides/ascend-cpu-development.md)，
 接入边界见[适配设计](docs/design/ascend-vllm-0.23.0-design.md)。
 
+两机 A3 / DeepSeek V4.1 的 Decode 调试开发版另见
+[**新手快速使用指南：环境、部署、安装采集、查看 JSON**](docs/guides/ascend-a3-beginner-quickstart.md)。
+首次使用请从该指南开始，不要套用 NVIDIA 环境向导或旧 0.23.0 补丁。
+本版要求固定源码，关闭 DSpark/MTP、图执行和异步调度；**真实 A3 验收仍待完成**。
+
 **实验版，尚未完成全部可靠性验收。** 双版本真实采集、AISBench 并发、
 独立消费探针对照、取消、关闭采集、层/阶段过滤和导出已有验证。
 整体长期内存仍会随历史索引增长；全新环境在线安装因网络中断未通过，不能据此用于生产。
@@ -301,6 +306,7 @@ tests/              # 自动化回归，不代替真实 GPU 验收
 - [环境准备](docs/guides/environment-setup.md)
 - [Ascend 快速开始：安装、服务、采集、验证和分析](docs/guides/ascend-quickstart.md)
 - [两机 A3 V4.1 1P1D Decode 调试版快速开始（A3 待验收）](docs/guides/ascend-v41-debug-quickstart.md)
+- [A3 新手快速使用指南：从准备环境到获取 JSON](docs/guides/ascend-a3-beginner-quickstart.md)
 - [公共采集与数据设计](docs/design/design.md)
 - [需求和操作边界](docs/requirements.md)
 - [验证结果与未完成项](docs/validation/README.md)
