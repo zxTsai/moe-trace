@@ -37,6 +37,10 @@ EDITS = {
          "        capture_consumer(layer, topk_ids, topk_weights)\n\n"
          "        activation = getattr(layer, \"activation\", \"silu\")")],
     "vllm_ascend/worker/worker.py": [
+        ("            self.model_runner.load_model()\n",
+         "            self.model_runner.load_model()\n"
+         f"            from {HOOK} import initialize_debug\n"
+         "            initialize_debug(self.model_runner)\n"),
         ("    def shutdown(self) -> None:\n        if ensure_kv_transfer_shutdown is not None:",
          "    def shutdown(self) -> None:\n"
          f"        from {HOOK} import close_debug\n"

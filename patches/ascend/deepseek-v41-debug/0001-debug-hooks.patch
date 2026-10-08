@@ -52,3 +52,13 @@
 +        close_debug()
          if ensure_kv_transfer_shutdown is not None:
              ensure_kv_transfer_shutdown()
+ 
+@@ -841,6 +843,8 @@
+ 
+         with context, set_current_vllm_config(self.vllm_config):
+             self.model_runner.load_model()
++            from moe_trace.adapters.ascend_v41_debug import initialize_debug
++            initialize_debug(self.model_runner)
+ 
+         if self.vllm_config.weight_transfer_config is not None:
+             from vllm.distributed.weight_transfer.factory import (

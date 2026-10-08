@@ -149,6 +149,13 @@ def _get_session(runner, cfg):
     return _session
 
 
+def initialize_debug(runner):
+    cfg = read_config()
+    if cfg is not None:
+        check_runtime(runner, runner.vllm_config.compilation_config.cudagraph_mode)
+        _get_session(runner, cfg)  # Include idle workers in the declared deployment.
+
+
 @contextmanager
 def trace_target(runner, scheduler, input_ids, positions, mode):
     cfg = read_config()
