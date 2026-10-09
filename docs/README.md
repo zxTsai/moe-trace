@@ -4,6 +4,7 @@
 
 ## 使用指南
 
+- [Qwen3.6 单机 A3 快速开始](guides/Qwen3.6/README.md)：获取代码、安装工具、自动检查真机环境；采集运行时尚未完成。
 - [A3 新手快速使用指南](guides/A3新手快速使用指南.md)：两机 V4.1 1P1D 环境、部署、采集和 JSON 查看（待 A3 真机验收）。
 - [环境准备](guides/environment-setup.md)：版本检测、Conda 隔离、安装确认、失败处理。
 - [完整使用](guides/usage.md)：手动接入、配置、字段、分析、AISBench 与当前限制。

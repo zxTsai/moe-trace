@@ -30,6 +30,7 @@ CPU 操作见[开发与验证指南](docs/guides/ascend-cpu-development.md)，
 Qwen3.6 单机 A3 DP8/TP2 适配在 `feat/ascend-qwen36-035b-dp8-tp2` 分支进行，
 目前完成自动包定位和源码指纹检查，**采集运行时尚未完成，不能沿用 DeepSeek 启动器**。
 准备与接入计划见[Qwen3.6 适配设计](docs/design/Qwen3.6单机A3采集适配设计.md)。
+首次使用见[Qwen3.6 专用快速开始 README](docs/guides/Qwen3.6/README.md)：从下载代码到生成真机环境报告；采集步骤待实现。
 
 **实验版，尚未完成全部可靠性验收。** 双版本真实采集、AISBench 并发、
 独立消费探针对照、取消、关闭采集、层/阶段过滤和导出已有验证。
