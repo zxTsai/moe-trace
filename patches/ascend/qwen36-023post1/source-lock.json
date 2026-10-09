@@ -1,0 +1,14 @@
+{
+  "status": "source_inventory_only_not_runtime_supported",
+  "ascend_commit": "1cdb8c4db6e50f36f1fb3283b3e3dd618f6821e8",
+  "ascend_tag": "v0.23.0.post1",
+  "vllm_official_main_reference": "ee0da84ab9e04ac7610e28580af62c365e898389",
+  "sha256": {
+    "worker/model_runner_v1.py": "60b10f97333df49c4bb2a6b5673d13d2d3b964056564c50681984b16fd84d049",
+    "worker/worker.py": "c392da56095b255d47fe5ad7ffdfbedd269fe69851690e89a8d2ed44c073f6c3",
+    "ops/fused_moe/fused_moe.py": "a6bd913240ac452afafe3e04ca0d3e7bdb0f3d3fd2d63326e487e66d67ec4ecb",
+    "ops/fused_moe/prepare_finalize.py": "c66a1cf05b8494a9cf71f16b965a3ffce782d032b18270c364711329240c199d",
+    "quantization/methods/w8a8_dynamic.py": "1dd59f6f8114e19824d559b99cc4a22fed04e54ff0ecd9e853aa3b6a574699e2",
+    "ops/register_custom_ops.py": "c5eaccde6568f6f480c00a07cc582c8650e6849f25933c8e82787f4b0477ca9b"
+  }
+}

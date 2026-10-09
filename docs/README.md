@@ -15,6 +15,7 @@
 
 ## 需求与设计
 
+- [Qwen3.6 单机 A3 采集适配设计](design/Qwen3.6单机A3采集适配设计.md)：DP8/TP2、0.23.0.post1 调查与自动环境检查；运行时尚未完成。
 - [需求和操作边界](requirements.md)：原始开发约定。
 - [公共采集及数据格式](design/design.md)：输入行、执行关联、分片和校验。
 - [0.29.0 版本接入](design/vllm-0.29.0-design.md)。
