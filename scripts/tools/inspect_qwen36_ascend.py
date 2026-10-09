@@ -63,7 +63,7 @@ def main(argv=None):
                   "runtime_supported": False, "npu_verified": False,
                   "startup_command_reviewed": False,
                   "limitations": ["Source matches do not validate NPU binaries or runtime configuration",
-                                  "Collector integration is still under development"]}
+                                  "Experimental collector has CPU hook tests; this inventory does not validate runtime support"]}
         report["ascend_sources"] = inspect_sources(selected) if selected else None
         vllm = packages["vllm"]["package_path"]
         report["vllm_git_head"] = git_head(Path(vllm)) if vllm else None

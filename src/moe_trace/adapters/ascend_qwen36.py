@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import replace
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -12,6 +13,7 @@ from ..distributed.debug_layout import selector_rows
 from ..distributed.decode import Worker, Route
 from ..distributed.storage import create_run, WorkerWriter
 from ..errors import ConfigError, IntegrityError
+from ..io import atomic_json
 
 PROFILE = "qwen36-single-node-debug"
 _active = ContextVar("qwen36_capture", default=None)
@@ -65,7 +67,7 @@ def check_runtime(runner, mode):
     if (getattr(runner, "dynamic_eplb", False) or getattr(runner, "enable_enpu", False)
             or getattr(a.eplb_config, "dynamic_eplb", False)
             or any(getattr(a, k, False) for k in ("enable_force_eplb", "enable_fused_mc2",
-               "enable_flashcomm1", "enable_dsa_cp", "enable_shared_expert_dp",
+               "enable_flashcomm1", "enable_sp_by_pass", "enable_dsa_cp", "enable_shared_expert_dp",
                "multistream_overlap_gate", "multistream_overlap_shared_expert"))):
         raise ConfigError("EPLB, fused MC2, FlashComm, shared DP and multistream unsupported")
 
@@ -89,6 +91,33 @@ class Session:
         create_run(self.root, [worker], {"target": sorted(self.layers.values())},
                    validation_level="a3_unverified_debug")
         self.writer = WorkerWriter(self.root, worker, shard_records=256)
+        self.coverage_path = self.root.parent / "inputs.jsonl"
+        self.coverage_path.touch(exist_ok=False)
+        self.coverage_hash = hashlib.sha256()
+        self.coverage_count = 0
+
+    def record_inputs(self, rows):
+        value = {"execution": f"execution-{self.step}", "rows": [
+            {"input_row": r.input_row, "request": r.local_request, "position": r.position}
+            for r in rows.values()]}
+        # Canonical bytes used for independent coverage validation.
+        data = (json.dumps(value, sort_keys=True) + "\n").encode()
+        with self.coverage_path.open("ab") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        self.coverage_hash.update(data)
+        self.coverage_count += 1
+
+    def close(self):
+        if not self.writer.failed:
+            try:
+                atomic_json(self.root.parent / "inputs-index.json", {
+                    "sha256": self.coverage_hash.hexdigest(), "executions": self.coverage_count})
+                self.writer.close()
+            except BaseException:
+                self.writer.fail()
+                raise
 
 
 def get_session(runner, cfg):
@@ -150,6 +179,7 @@ def trace_target(runner, scheduler, ids, positions, mode):
             session.writer.declare_execution("target", list({r.row.input_row: r.row for r in records}.values()))
             for record in records:
                 session.writer.append(record)
+        session.record_inputs(rows)
     except BaseException:
         session.writer.fail()
         raise
@@ -181,18 +211,14 @@ def capture_routes(layer, ids, weights, prepare, extra, context, num_experts, fo
             raise IntegrityError("DP metadata excludes a valid input")
     indices = selector_rows(type(prepare).__name__, input_size=size, valid_indices=state["rows"],
         tp_size=2, tp_rank=session.worker.tp_rank, dp_rank=session.worker.dp_rank,
-        output_size=len(ids), padded_size=getattr(extra, "padded_num_tokens", None), dp_sizes=dp_sizes)
+        output_size=len(ids), padded_size=getattr(extra, "padded_num_tokens", None), dp_sizes=dp_sizes) if state["rows"] else []
     index = [j for _, j in indices]
     selected = ids[index].detach().cpu()
-    scales = weights[index].detach().float().cpu() if cfg_weights(session) else None
+    scales = weights[index].detach().float().cpu() if session.cfg["save_expert_weights"] else None
     state["routes"][name] = [Route(session.worker, session.worker, state["rows"][i], "target",
         session.layers[name], int(num_experts), tuple(selected[k].tolist()),
         tuple(scales[k].tolist()) if scales is not None else None) for k, (i, _) in enumerate(indices)]
     state["tensors"][name] = (index, selected)
-
-
-def cfg_weights(session):
-    return session.cfg["save_expert_weights"]
 
 
 def capture_consumer(layer, ids):
@@ -213,5 +239,5 @@ def close():
     global _session
     if _session:
         if not _session.writer.failed:
-            _session.writer.close()
+            _session.close()
         _session = None

@@ -3,6 +3,7 @@ from dataclasses import replace
 import importlib.util
 import json
 import os
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -10,7 +11,7 @@ import pytest
 import torch
 
 from moe_trace.adapters import ascend_qwen36 as adapter
-from moe_trace.distributed.decode import Worker
+from moe_trace.distributed.decode import Worker, DecodeRow, Route
 from moe_trace.distributed.qwen_cli import collect
 from moe_trace.distributed.storage import collect_run
 from moe_trace.errors import ConfigError, IntegrityError
@@ -60,6 +61,7 @@ def test_cpu_actual_patched_forward_prepare_and_w8a8(tmp_path, monkeypatch):
         pytest.skip("set MOE_QWEN_ASCEND_SOURCE for actual source hook execution")
     stage = load_stage(monkeypatch)
     overlay = stage.stage(Path(source) / "vllm_ascend", tmp_path / "overlays")
+    assert (overlay / "hooks.patch").read_bytes() == (ROOT / "patches/ascend/qwen36-023post1/0001-qwen-hooks.patch").read_bytes()
     # The source remains untouched, while the copied real methods invoke new hooks.
     from inspect_qwen36_ascend import inspect_sources
     assert inspect_sources(Path(source) / "vllm_ascend")["all_reference_files_match"]
@@ -114,7 +116,7 @@ def test_cpu_actual_patched_forward_prepare_and_w8a8(tmp_path, monkeypatch):
             monkeypatch.setattr(adapter, "get_session", lambda *args, s=session: s)
             prepare.tp_rank = tp
             if dp:
-                session.writer.close()
+                session.close()
                 continue
             for step in (1, 2):
                 if step == 1:
@@ -139,7 +141,7 @@ def test_cpu_actual_patched_forward_prepare_and_w8a8(tmp_path, monkeypatch):
                     intermediate_tensors=None, inputs_embeds=None, model_kwargs={})
                 exec(compile(ast.fix_missing_locations(wrapper), "actual-forward-hook", "exec"), ns)
                 ns["forward"]()
-            session.writer.close()
+            session.close()
     routes = collect(tmp_path / "cpu")
     assert len(routes) == 8  # four Decode tokens times two actual MoE layers
     by_token = {(r.row.local_request, r.row.position, r.layer): r.expert_ids for r in routes}
@@ -149,6 +151,8 @@ def test_cpu_actual_patched_forward_prepare_and_w8a8(tmp_path, monkeypatch):
         assert by_token[("A", 3, layer)] == (1, 0)
         assert by_token[("B", 2, layer)] == (2, 1)
     assert len(kernel_inputs) == 8
+    assert kernel_inputs[0][0].tolist() == [[3, 1], [2, 0]]
+    assert kernel_inputs[4][0].tolist() == [[2, 0], [3, 2]]
     # No prompt or padding rows in output; original source checksum still matches.
     assert {r.row.token_id for r in routes} == {12, 13, 21, 22}
     assert inspect_sources(Path(source) / "vllm_ascend")["all_reference_files_match"]
@@ -169,3 +173,126 @@ def test_multimodal_and_disabled_capture(monkeypatch):
     with adapter.trace_target(None, None, None, None, None):
         adapter.capture_routes(None, None, None, None, None, None, None)
         adapter.capture_consumer(None, None)
+
+
+@pytest.mark.parametrize("failure", ["missing", "duplicate", "consumer", "token", "privacy"])
+def test_capture_failures_and_privacy(tmp_path, monkeypatch, failure):
+    runner = runtime()
+    routed = NS()
+    runner.model = NS(named_modules=lambda: [("moe", NS(layer_name="model.layers.2.mlp.experts",
+        router=object(), moe_config=NS(), routed_experts=routed))])
+    runner.input_batch = NS(req_ids=["A"], num_computed_tokens_cpu=[1])
+    runner.requests = {"A": NS(num_prompt_tokens=1, get_token_id=lambda pos: 21)}
+    schedule = NS(num_scheduled_tokens={"A": 1}, total_num_scheduled_tokens=1)
+    cfg = config(tmp_path)
+    if failure == "privacy":
+        cfg["save_token_ids"] = False
+    worker = Worker(adapter.PROFILE, "cpu", "A3", "dp-0-tp-0", 0, 0, 0, 0)
+    session = adapter.Session(runner, cfg, worker)
+    monkeypatch.setattr(adapter, "read_config", lambda: cfg)
+    monkeypatch.setattr(adapter, "get_session", lambda *args: session)
+    prepare = type("PrepareAndFinalizeWithAll2All", (), {})()
+    def execute():
+        with adapter.trace_target(runner, schedule, torch.tensor([22 if failure == "token" else 21, 0]),
+                                  torch.tensor([1, 0]), NS(name="NONE")):
+            if failure == "missing":
+                return
+            ids = torch.tensor([[3, 1]])
+            adapter.capture_routes(routed, ids, torch.ones(1, 2), prepare, NS(), NS(), 4)
+            if failure == "duplicate":
+                adapter.capture_routes(routed, ids, torch.ones(1, 2), prepare, NS(), NS(), 4)
+            adapter.capture_consumer(routed, torch.tensor([[2, 1]]) if failure == "consumer" else ids)
+    if failure != "privacy":
+        with pytest.raises(IntegrityError):
+            execute()
+        assert session.writer.failed
+        with pytest.raises(IntegrityError):
+            collect_run(session.root)
+    else:
+        execute()
+        session.close()
+        _, rows = collect_run(session.root)
+        assert rows[0][0].row.token_id is None and rows[0][0].row.input_role == "redacted"
+
+
+def test_launcher_and_overlay_integrity(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("qwen_launch", ROOT / "scripts/deployment/qwen36_capture.py")
+    launcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(launcher)
+    argv = launcher.command("/models/qwen")
+    assert argv[argv.index("--data-parallel-size-local") + 1] == "8"
+    assert "--enforce-eager" in argv and "--no-async-scheduling" in argv
+    assert "--no-enable-prefix-caching" in argv and "--enable-expert-parallel" in argv
+    source = os.environ.get("MOE_QWEN_ASCEND_SOURCE")
+    if source:
+        stage = load_stage(monkeypatch)
+        overlay = stage.stage(Path(source) / "vllm_ascend", tmp_path / "overlays")
+        launcher.verify_overlay(overlay)
+        (overlay / "vllm_ascend/worker/worker.py").write_text("# modified\n")
+        with pytest.raises(ValueError, match="changed"):
+            launcher.verify_overlay(overlay)
+
+
+@pytest.mark.parametrize("failure", [None, "missing_route", "coverage_hash", "tp_disagree", "all_empty", "incomplete"])
+def test_cross_worker_coverage(tmp_path, failure):
+    runner = runtime()
+    routed = NS()
+    runner.model = NS(named_modules=lambda: [("moe", NS(layer_name="model.layers.2.mlp.experts",
+        router=object(), moe_config=NS(), routed_experts=routed))])
+    row = DecodeRow("Qwen-dp-0", "execution-1", 1, "Qwen-dp-0:A", "A", 0, 1, 21, "target_decode")
+    for dp in range(8):
+        for tp in range(2):
+            worker = Worker(adapter.PROFILE, "cpu", "A3", f"dp-{dp}-tp-{tp}", dp, tp, dp*2+tp, dp*2+tp)
+            session = adapter.Session(runner, config(tmp_path), worker)
+            if dp == 0 and failure != "all_empty":
+                session.step = 1
+                session.record_inputs({0: row})
+                if tp == 0 and failure != "missing_route":
+                    session.writer.declare_execution("target", [row])
+                    session.writer.append(Route(worker, worker, row, "target", 2, 4, (3, 1)))
+            if failure == "incomplete" and (dp, tp) == (7, 1):
+                continue
+            session.close()
+    root = tmp_path / "cpu"
+    target = root / "dp-0-tp-1"
+    if failure == "coverage_hash":
+        with (target / "inputs.jsonl").open("ab") as stream:
+            stream.write(b"\n")
+    elif failure == "tp_disagree":
+        data = (json.dumps({"execution": "execution-1", "rows": []}, sort_keys=True) + "\n").encode()
+        (target / "inputs.jsonl").write_bytes(data)
+        (target / "inputs-index.json").write_text(json.dumps({"sha256": hashlib.sha256(data).hexdigest(), "executions": 1}))
+    if failure:
+        with pytest.raises((IntegrityError, OSError)):
+            collect(root)
+    else:
+        assert len(collect(root)) == 1
+
+
+@pytest.mark.parametrize("tp", [0, 1])
+def test_unequal_dp_allgather_ownership(tmp_path, monkeypatch, tp):
+    runner = runtime()
+    routed = NS()
+    runner.model = NS(named_modules=lambda: [("moe", NS(layer_name="model.layers.2.mlp.experts",
+        router=object(), moe_config=NS(), routed_experts=routed))])
+    runner.input_batch = NS(req_ids=["A"], num_computed_tokens_cpu=[1])
+    runner.requests = {"A": NS(num_prompt_tokens=1, get_token_id=lambda pos: 21)}
+    schedule = NS(num_scheduled_tokens={"A": 1}, total_num_scheduled_tokens=1)
+    cfg = config(tmp_path)
+    worker = Worker(adapter.PROFILE, "cpu", "A3", f"dp-1-tp-{tp}", 1, tp, 2+tp, 2+tp)
+    session = adapter.Session(runner, cfg, worker)
+    monkeypatch.setattr(adapter, "read_config", lambda: cfg)
+    monkeypatch.setattr(adapter, "get_session", lambda *args: session)
+    prepare = type("PrepareAndFinalizeWithAllGather", (), {})()
+    # Max DP 3, padded forward 2, local actual 1. Local block begins at selector row 3.
+    meta = NS(num_tokens_across_dp_cpu=torch.tensor([3, 1, 2, 0, 0, 0, 0, 0]))
+    ids = torch.tensor([[0, 1]] * 24)
+    ids[3] = torch.tensor([3, 2])
+    with adapter.trace_target(runner, schedule, torch.tensor([21, 0]), torch.tensor([1, 0]), NS(name="NONE")):
+        adapter.capture_routes(routed, ids, torch.ones(24, 2), prepare, NS(), NS(dp_metadata=meta), 4)
+        adapter.capture_consumer(routed, ids)
+    session.close()
+    _, records = collect_run(session.root, allow_empty=True)
+    assert len(records) == (1 if tp == 0 else 0)
+    if tp == 0:
+        assert records[0][0].expert_ids == (3, 2)

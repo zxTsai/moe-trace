@@ -1,0 +1,10 @@
+{
+  "profile": "qwen36-single-node-debug",
+  "npu_verified": false,
+  "ascend_commit": "1cdb8c4db6e50f36f1fb3283b3e3dd618f6821e8",
+  "patched_sha256": {
+    "worker/model_runner_v1.py": "1957dd94b2ac7b4b4d56bdcad2ba197d86c7c756b5259dec6556236be1528208",
+    "quantization/methods/w8a8_dynamic.py": "59837460f6f20c1ce2e427b6a82a3b0b51839e2fdeb7403d2b88a51b5e63fd1a",
+    "worker/worker.py": "230417b911124e5e1c1d12d63b7466d058a384c9a13ea5968e0acc402acde5c5"
+  }
+}

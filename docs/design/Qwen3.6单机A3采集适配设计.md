@@ -1,7 +1,7 @@
 # Qwen3.6 单机 A3 DP8/TP2 采集适配设计
 
 分支：`feat/ascend-qwen36-035b-dp8-tp2`，起点为 Ascend 开发分支的 `e65cb08`。
-状态：源码调查与环境检查阶段；尚未实现/验证本场景的采集运行时。
+状态：实验采集实现与 CPU 固定源码接入验证通过，A3 真机待验收。
 不修改 main，不改写用户已安装源码，不将 V4.1 支持声明扩展到 Qwen。
 
 ## 用户提供的环境
@@ -59,6 +59,28 @@
 - 全量现有测试不能退化；逐阶段 Git 提交。
 - 提供中文真机指南与隔离加载脚本，现场先普通请求，再采集，再独立结果对照。
 - 没有真实 A3 验收前保持 `npu_verified:false`，不以 CPU 测试声明 Qwen 采集已可用。
+
+## 已实现的实验接入
+
+`ascend_qwen36` adapter 在实际 forward 区块建立上下文，W8A8 MoE.apply 的 selector 后
+捕获真实逻辑 IDs，fused_experts_input 构造前核对 consumer IDs 没有改变。
+模型模块按 runner 的 layer_name/router/moe_config 发现，routed_experts 对象关联到原始层号。
+只保存 Decode，有效文本 MRoPE 的三个位置轴必须一致，非文本多模态拒绝。
+
+首版只支持非 SP 的 All2All、MC2、DP padded AllGather。SP/FlashComm/shared-DP 拒绝，
+AllGather 只由 TP0 保存本 DP 有效行；不添加新的通信 collective。
+ID/权重同步拷贝 CPU，不原地改变模型输入、路由张量或调度。
+
+每个 worker 单独写 schema run，额外写完整 Decode 输入声明的有界逐行 JSONL 和 SHA256。
+关机排空后，汇总核对全部 16 worker、跨 TP 输入声明一致以及 token/layer 全覆盖。
+存储完整不等于每个请求成功结束，取消/完成原因仍未接入。
+
+工具：`stage_qwen36_ascend.py` 隔离副本、`qwen36_capture.py` 显式 --execute 启动、
+`moe_trace.distributed.qwen_cli` JSON/CSV 汇总；详见[Qwen README](../guides/Qwen3.6/README.md)。
+
+CPU 脚本执行真实 patched All2All.prepare、完整 W8A8 MoE.apply 与 forward 接入区块，
+依赖 mock 模型/selector/NPU kernel/组，未运行完整 vLLM 服务或真实权重。
+证据见[采集 CPU 验证](../validation/Qwen3.6采集功能CPU验证.md)。
 
 ## 当前可运行的环境检查
 

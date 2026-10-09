@@ -2,9 +2,9 @@
 
 适用目标：Qwen3.6-35B-A3B，单台 A3，8 卡 16 die，DP8/TP2，Prefill/Decode 混部，只采集 Decode。
 
-**当前版本只完成环境检查，Qwen 专用采集 adapter、补丁、启动和汇总尚未完成。**
-本文可执行到生成环境报告，不是“安装后即可采集”的教程，也不能使用 DeepSeek 启动器代替。
-后续实现完成后会补齐采集操作。CPU 已完成回归，A3 真机采集未验收。
+**当前已实现 Qwen 专用采集 adapter、独立源码副本、调试启动器和 JSON/CSV 汇总，CPU 源码接入测试通过。**
+真实 A3 尚未验收；支持文本、Ascend W8A8、V1/eager/同步、EP、无前缀缓存、无投机解码、
+无 FlashComm/SP/多流/EPLB。不能直接在官方图/异步优化配置上采集，也不能用 DeepSeek 启动器代替。
 
 ## 1. 获取采集工具代码
 
@@ -108,7 +108,7 @@ python -m pip check
 `--no-deps` 不自动安装或升级 vLLM/Ascend 依赖。缺少本项目的 NumPy/PyYAML 时，在隔离环境
 按项目依赖声明补齐，不盲目升级整套软件栈。
 本阶段的检查脚本只用 Python 标准库，也可先不安装工具包直接运行它。
-**安装工具包不代表采集 hook 已生效；本阶段还没有 Qwen 可用补丁。**
+安装工具包不代表采集 hook 已生效，还需要下面的源码检查、副本和重启步骤。
 
 ## 5. 自动查询实际包位置并生成报告
 
@@ -153,7 +153,7 @@ printf '%s\n' "$QWEN_REPORT_DIR/environment.json"
 | `ascend_sources.all_reference_files_match` | 是否匹配本次调查的官方 post1 文件 |
 | `vllm_git_head` | 可识别的实际 vLLM 源码提交 |
 | `model.architectures` | 实际模型架构，不能只凭目录名判断 |
-| `runtime_supported:false` | 当前尚未完成 Qwen 采集运行时；不是报告出错 |
+| `runtime_supported:false` | inventory 脚本不判定运行时支持；需要实际启动和验证，不是报告出错 |
 | `npu_verified:false` | 未验收真实 NPU 采集 |
 
 参考 Ascend commit：`1cdb8c4db6e50f36f1fb3283b3e3dd618f6821e8`。
@@ -171,16 +171,106 @@ printf '%s\n' "$QWEN_REPORT_DIR/environment.json"
 重点确认 EP、量化、前缀缓存、图执行、异步调度、FlashComm、多流和 MTP。
 这些会影响真实 token 行排列或 hook 执行，不是只知道 DP8/TP2 就足够。
 
-## 8. 后续采集流程：尚未开放执行
+## 8. 创建采集副本
 
-计划顺序：源码检查 → 独立 Qwen 补丁副本 → 专用加载启动 → 代理/API 发请求或 AISBench →
-各 worker 保存 Decode 路由 → 正常收尾 → 严格校验并导出 JSON。
-当前是普通单机 P/D 混部，不要求使用 DeepSeek 两机 Mooncake PD 代理。
-具体启动与导出命令将在运行时实现并验证后补充，本文不提供占位命令冒充可运行功能。
+在服务所用容器/Python 的插件仓库根目录运行；自动查找实际 Ascend 包，不原地修改它：
 
-未来文件将保存到 host 可见的输出目录，device 路由张量拷贝到 CPU 后再写盘。
-预期关联请求、实际输入 token 位置、引擎/执行轮次、原始模型层及逻辑专家 ID；
-不能把共享专家或物理设备号混入逻辑 Top-K 统计。
+```bash
+python scripts/tools/stage_qwen36_ascend.py --output-parent /trace-output/qwen36-overlays
+```
+
+检查固定源码摘要和接入锚点后，会打印 `qwen36-overlay-...` 目录。
+源码不匹配就停止，提交环境报告给维护者，不强行忽略 hash。
+本工具只检查固定 Ascend 文件和运行时契约，不证明 vLLM 二进制完整兼容。
+V4.1/Granite 副本不能使用；必须是本命令生成的 Qwen 副本。
+
+## 9. 用调试配置启动采集
+
+先保留原服务的命令和日志，结束自己的测试请求，再正常停止原测试服务，确保设备/端口空闲。
+不要终止其他用户或生产服务。混部不需要额外 P 节点或 Mooncake 代理。
+先不加 `--execute` 查看实际命令：
+
+```bash
+QWEN_OVERLAY=/trace-output/qwen36-overlays/实际生成的目录
+python scripts/deployment/qwen36_capture.py \
+  --model "$QWEN_MODEL" --overlay "$QWEN_OVERLAY" \
+  --output-root /trace-output/qwen36-traces --node-id A3 \
+  --save-token-ids --save-expert-weights
+```
+
+检查后在同一条命令末尾加 `--execute` 才启动。
+启动器使用当前 Python，设置 V1、DP8/TP2、本地 DP8、EP、Ascend 量化、eager 和同步，
+关闭缓存/FlashComm/SP bypass/共享专家多流等优化。使用 4096 上下文、512 batch tokens、
+每 DP 8 序列、0.8 显存预算作为小规模调试起点；这组参数尚未在你的 A3 实测。
+默认只监听 `127.0.0.1:8000`，远程客户端需要显式指定 `--host` 并做好网络访问控制。
+`--port` 可改端口；设备可见性应包含 16 个逻辑 device。
+
+启动器打印 `Trace run: /trace-output/qwen36-traces/UUID`，记下完整路径。
+等待服务 ready，若配置/架构/实际通信路径不符会明确报错，不声称采集成功。
+仅支持 `Qwen3_5MoeForConditionalGeneration` 实际架构，不能由 Qwen 文件夹名推断兼容。
+ID 和权重默认不保存，示例显式开启用于调试；分享轨迹时注意脱敏。
+
+## 10. 发请求、停止、导出
+
+另开同环境终端发送请求，或让 AISBench 直接访问该 API 服务：
+
+```bash
+curl --noproxy '*' --fail http://127.0.0.1:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3.6","messages":[{"role":"user","content":"请解释专家混合模型。"}],"max_tokens":32,"stream":false}'
+```
+
+先测一条，再测试多个不同长度并发请求。等待请求完成后，在服务终端按一次 Ctrl+C，
+等待服务正常退出并排空 writer。异常退出或 worker 未收尾的结果不能汇总为成功。
+填入刚才打印的 UUID：
+
+```bash
+QWEN_RUN=/trace-output/qwen36-traces/实际UUID
+python -m moe_trace.distributed.qwen_cli "$QWEN_RUN" \
+  --output /trace-output/qwen36-details-实际UUID.json \
+  --counts /trace-output/qwen36-counts-实际UUID.csv
+```
+
+导出文件必须不存在并位于原始 run 外。成功输出 `worker_traces_complete:true` 和路由数。
+16 个 worker 都必须收尾，包括 idle worker；同时核对输入声明哈希、跨 TP 一致性、
+每个 Decode token 的全部层覆盖、分片摘要、重复和越界。
+这只证明已执行范围的轨迹完整，尚未采集请求完成/取消终止原因。
+
+查看第一条：
+
+```bash
+python -c 'import json,sys; d=json.load(open(sys.argv[1])); print(len(d["routes"])); print(json.dumps(d["routes"][0],ensure_ascii=False,indent=2))' /trace-output/qwen36-details-实际UUID.json
+```
+
+每条包含 owner/observer 的 DP/TP/EP 和逻辑 device，以及 row 的请求、引擎、执行、
+输入位置、token ID、`target_decode`，原始层号、逻辑专家 ID、可选权重。
+`global_request` 是 DP 命名空间内的内部请求标识，不是已验证的 API response ID。
+当前 input token 的路由不是该 forward 新预测的 token 路由；最后输出 token 未再输入时没有下一轮路由。
+
+各 worker 在 host 的 `UUID/dp-*-tp-*/trace/` 写分片，旁边有 `inputs.jsonl` 和摘要索引。
+容器路径 `/trace-output` 对应前述宿主机 `/data/moe-output`；不自动上传到其他机器。
+CSV 按层/逻辑专家计数，不把共享专家或 physical ID 混入 Top-K。
+同步 D2H 和落盘会明显影响性能，不将此模式用于生产吞吐结论。
+
+## 11. 在 CPU 复验接入功能
+
+使用独立 CPU 开发环境（PyTorch CPU、pytest、插件源码），不安装 NPU 软件栈或模型权重。
+下载固定 Ascend 源码用于提取 Python 接入点，不把它安装进 CPU 环境：
+
+```bash
+git clone --depth 1 --branch v0.23.0.post1 \
+  https://github.com/vllm-project/vllm-ascend.git /你的开发目录/vllm-ascend-post1
+
+python scripts/validation/qwen36_cpu.py \
+  --ascend-source /你的开发目录/vllm-ascend-post1 \
+  --output-root ./outputs/qwen36-cpu
+```
+
+已有相同源码目录时复用，不覆盖或重复下载。该脚本依赖本仓库测试文件。
+验证实际 patched forward 区块、All2All.prepare 和完整 W8A8 MoE.apply；模型回调、
+selector 和专家 kernel/分布式组是 CPU mock，不运行完整 vLLM 服务或真实 Qwen 权重。
+输出独立目录、8 条路由的 `details.json`、16 次专家选择的 CSV 及 `cpu-validation.json`。
+见[采集功能 CPU 验证报告](../../validation/Qwen3.6采集功能CPU验证.md)。
 
 ## 常见问题
 
@@ -192,7 +282,7 @@ printf '%s\n' "$QWEN_REPORT_DIR/environment.json"
 | 没有源码 HEAD | 安装可能没有 Git 元数据；文件指纹仍可报告 |
 | Permission denied | 检查挂载及当前用户权限，选专用可写目录 |
 | 报告文件已存在 | 使用新目录；脚本拒绝覆盖旧文件 |
-| 已安装插件但没有路由输出 | 当前只有检查功能，Qwen 采集尚未实现 |
+| 已安装插件但没有路由输出 | 确认加载 Qwen 副本、显式 --execute、请求实际有 Decode forward；停止后再汇总 |
 
 进一步阅读：[适配设计](../../design/Qwen3.6单机A3采集适配设计.md)、
 [环境检查验证记录](../../validation/Qwen3.6环境检查验证记录.md)、

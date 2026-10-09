@@ -4,6 +4,7 @@ from collections import Counter
 import csv
 from dataclasses import asdict
 import json
+import hashlib
 from pathlib import Path
 import sys
 
@@ -17,10 +18,30 @@ def collect(root):
     expected = {f"dp-{d}-tp-{t}" for d in range(8) for t in range(2)}
     if {p.name for p in root.iterdir() if p.is_dir()} != expected:
         raise IntegrityError("expected exactly sixteen worker directories")
-    joined, identity, layers, seen = [], None, None, set()
+    joined, identity, layers, seen, coverage = [], None, None, set(), {}
     for d in range(8):
         for t in range(2):
             name = f"dp-{d}-tp-{t}"
+            data = (root / name / "inputs.jsonl").read_bytes()
+            index = json.loads((root / name / "inputs-index.json").read_text())
+            if hashlib.sha256(data).hexdigest() != index["sha256"]:
+                raise IntegrityError("input coverage hash mismatch")
+            declarations = [json.loads(line) for line in data.splitlines()]
+            if len(declarations) != index["executions"]:
+                raise IntegrityError("input execution count mismatch")
+            executions = {}
+            for declaration in declarations:
+                execution = declaration["execution"]
+                if execution in executions:
+                    raise IntegrityError("duplicate input execution")
+                rows = declaration["rows"]
+                positions = {r["input_row"]: (r["request"], r["position"]) for r in rows}
+                if len(positions) != len(rows):
+                    raise IntegrityError("duplicate input row")
+                executions[execution] = positions
+            if t and coverage[d] != executions:
+                raise IntegrityError("TP input declarations disagree")
+            coverage[d] = executions
             manifest, records = collect_run(root / name / "trace", allow_empty=True)
             if manifest["validation_level"] != "a3_unverified_debug" or len(manifest["workers"]) != 1:
                 raise IntegrityError("invalid worker profile")
@@ -38,7 +59,16 @@ def collect(root):
                 if key in seen or route.row.kind != "target_decode" or accepted is not None:
                     raise IntegrityError("duplicate or non-target-decode route")
                 seen.add(key)
+                if (route.row.source_engine != f"Qwen-dp-{d}"
+                        or executions.get(route.row.execution, {}).get(route.row.input_row)
+                        != (route.row.local_request, route.row.position)):
+                    raise IntegrityError("route differs from actual input declaration")
                 joined.append(route)
+    expected = {(f"Qwen-dp-{d}", execution, row, layer)
+        for d, executions in coverage.items() for execution, rows in executions.items()
+        for row in rows for layer in layers["target"]}
+    if seen != expected:
+        raise IntegrityError("missing or extra Decode token/layer coverage across TP workers")
     if not joined:
         raise IntegrityError("no Decode routes")
     return joined
