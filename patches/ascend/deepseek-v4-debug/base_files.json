@@ -1,0 +1,25 @@
+{
+  "validation_level": "a3_unverified_debug",
+  "base_commits": {
+    "vllm": "ced6857afa0ea7b2e3f0846a62e1394e90f15607",
+    "vllm_ascend": "0e181fc85fff24db10e5f92f10319c1913e6e9c5"
+  },
+  "sha256": {
+    "vllm/v1/worker/gpu_input_batch.py": "18cf455c9d0eea61cc581c7932f2e6cd09786914e82dd35eef1c1430da359a0f",
+    "vllm/v1/request.py": "da610d5203e72d2d524adc5fb39df11502a23520f2f31d9a44cf13d343f9c25d",
+    "vllm/config/scheduler.py": "822179da62be4bca0619c8590082ae09123f5c4415f9cc2037be673748239edb",
+    "vllm/config/parallel.py": "f012ace89e3fb730a467f729f602679bc145c49f0d10721811c9d818570e7b2b",
+    "vllm_ascend/worker/model_runner_v1.py": "3bb01c153266a5d97f021d814d6ca2b4c60eef48f260adf34c2c33d2e938b6bc",
+    "vllm_ascend/worker/worker.py": "23097be63048125e23d5fe7e7fcd23d7d22040e8728995cb137cf5490b63c53e",
+    "vllm_ascend/ops/fused_moe/routed_experts.py": "dd8150702f67150db0ca0c93a1e51b69c3a507c3fd491136ff25a5751f4abd64",
+    "vllm_ascend/ops/fused_moe/prepare_finalize.py": "dff4fac292200fc06f60aef48505f1ee38314ea5adb53560b325901db308eb24",
+    "vllm_ascend/ops/fused_moe/router/fused_topk_router.py": "06c47fd91e8c36f6f5465cea0b32a184280f842833c2bff27a18fc6d17fcb838",
+    "vllm_ascend/ops/fused_moe/router/router_factory.py": "3043c3ff106ae811ed7b7e1d78683c8266f8288a88603db6abe8e1421987b3ef",
+    "vllm_ascend/ops/fused_moe/moe_comm_method.py": "81f7bd10fa7c7ad4a2cc4bd7ab66becb89d883e95933f22b6eff6eec4eae954a",
+    "vllm_ascend/ops/fused_moe/fused_moe.py": "d440f85ec2b989066692dd184f4e075336eb496e8cf16c9b1f6a8a2b98694aa1",
+    "vllm_ascend/quantization/methods/w8a8/w8a8_dynamic.py": "8d20efa51edb84c67167adb628d3699968dae88a7c5285566b9ecd6390759537",
+    "vllm_ascend/models/deepseek_v4/model.py": "eb5608f2155330fa4c59551ff76d6629eaffba9377233988fbfc75a68261d440",
+    "vllm_ascend/models/common/ops/sequence_parallel.py": "73bcf07050bce8b049dd0bbdb0a7504f6eba157a1e97a5033849ef31ef05fcb0",
+    "vllm_ascend/ops/register_custom_ops.py": "258f09755559afa1493f1ffbbb30235fb34e449cd554e5cc5b1db159d5c0382c"
+  }
+}
