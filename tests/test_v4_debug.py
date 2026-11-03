@@ -204,6 +204,10 @@ def test_actual_patched_v4_source_cpu(tmp_path, monkeypatch):
     counts, summary, _ = analyze(records)
     assert sum(counts.values()) == 16 and summary[1]["unused_experts"] == 2
     assert summary[1]["max_over_mean"] == 2
+    # A changed package copy must never be accepted by the server launcher.
+    (source / "ops/fused_moe/routed_experts.py").write_text("# tampered\n")
+    with pytest.raises(ValueError, match="overlay changed"):
+        launcher.verify_overlay(overlay)
 
 
 @pytest.mark.parametrize("field,value", [("speculative_config", NS(method="mtp")),
@@ -277,6 +281,53 @@ def test_disabled_does_not_touch_model_or_disk(monkeypatch):
         adapter.capture_consumer(None, None)
 
 
+def test_privacy_actual_token_check_and_rank_validation(tmp_path, monkeypatch):
+    runner, layers, current = session(tmp_path, monkeypatch)
+    current.cfg["save_token_ids"] = False
+    current.cfg["save_expert_weights"] = False
+    scheduler, ids, positions = batch(runner)
+    prepare = type("PrepareAndFinalizeWithAll2All", (), {})()
+    with adapter.trace_target(runner, scheduler, ids, positions, NS(name="NONE")):
+        for l in layers:
+            values = torch.tensor([[3, 1], [1, 2], [0, 2]])
+            adapter.capture_routes(l, values, torch.ones(3, 2), prepare, NS(), NS(), 4)
+            adapter.capture_consumer(l, values)
+    current.close()
+    _, records = collect_run(current.root)
+    assert all(r.row.token_id is None and r.weights is None for r, _ in records)
+    assert all(r.row.input_role == "redacted" for r, _ in records)
+    ids[0] = 999
+    with pytest.raises(IntegrityError, match="mismatch"):
+        adapter.build_inputs(runner, scheduler, ids, positions, 1, "test")
+
+
+def test_source_inventory_rejects_foreign_package(tmp_path):
+    inventory = script("scripts/tools/inspect_ascend_v4.py")
+    report = inventory.inspect(tmp_path / "vllm", tmp_path / "vllm_ascend")
+    assert report["source_check_passed"] is False
+    lock = json.loads((ROOT / "patches/ascend/deepseek-v4-debug/base_files.json").read_text())
+    assert len(report["differences"]) == len(lock["sha256"])
+
+
+def test_deployment_rank_discovery(monkeypatch, tmp_path):
+    import sys
+    import types
+    module = types.ModuleType("vllm.distributed")
+    dp, tp, ep = NS(world_size=16, rank_in_group=9), NS(world_size=1, rank_in_group=0), NS(world_size=16, rank_in_group=9)
+    module.get_dp_group, module.get_tp_group, module.get_ep_group = lambda: dp, lambda: tp, lambda: ep
+    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.distributed", module)
+    monkeypatch.setattr(adapter, "_session", None)
+    runner = runtime()
+    runner.model = NS(named_modules=lambda: [("l0", layer(0)), ("l1", layer(1))])
+    result = adapter.get_session(runner, config(tmp_path))
+    assert result.worker.ep_rank == 9 and result.worker.worker == "dp-9-tp-0"
+    adapter.close()
+    ep.rank_in_group = 8
+    with pytest.raises(ConfigError, match="topology"):
+        adapter.get_session(runner, config(tmp_path))
+
+
 def test_tp1_allgather_filters_foreign_dp_and_prompt(tmp_path, monkeypatch):
     runner, layers, current = session(tmp_path, monkeypatch, dp=1)
     scheduler, ids, positions = batch(runner)
@@ -291,6 +342,37 @@ def test_tp1_allgather_filters_foreign_dp_and_prompt(tmp_path, monkeypatch):
     _, joined = collect_run(current.root)
     assert len(joined) == 4
     assert {(r.row.local_request, r.expert_ids) for r, _ in joined} == {("B", (3, 1)), ("A", (0, 2))}
+
+
+def test_actual_mc2_tp1_padding_and_input_id_layout(tmp_path, monkeypatch):
+    ascend = os.environ.get("MOE_V4_ASCEND_SOURCE")
+    if not ascend:
+        pytest.skip("set MOE_V4_ASCEND_SOURCE for actual MC2 source execution")
+    source = Path(ascend) / "vllm_ascend"
+    namespace = dict(torch=torch, nn=torch.nn, QuantType=NS(NONE="none"),
+        MoEPrepareOutput=lambda **kw: NS(**kw), get_current_vllm_config_or_none=lambda: None)
+    helper = next(n for n in ast.parse((source / "ops/fused_moe/moe_utils.py").read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == "_pad_tokens_with_cat")
+    exec(compile(ast.fix_missing_locations(ast.Module(body=[helper], type_ignores=[])), "actual-pad", "exec"), namespace)
+    namespace["_EXTRA_CTX"] = NS(padded_num_tokens=6, mc2_mask=torch.tensor([True, True, True, False, False, False]))
+    prepare_fn = method(source / "ops/fused_moe/prepare_finalize.py", "PrepareAndFinalizeWithMC2", "prepare", namespace)
+    pad_fn = method(source / "ops/fused_moe/prepare_finalize.py", "PrepareAndFinalizeWithMC2", "pad_and_split_input_ids", namespace)
+    prepare = type("PrepareAndFinalizeWithMC2", (), {"prepare": prepare_fn, "pad_and_split_input_ids": pad_fn})()
+    prepare.tp_size, prepare.tp_rank = 1, 0
+    runner, layers, current = session(tmp_path, monkeypatch)
+    scheduler, ids, positions = batch(runner)
+    output = prepare.prepare(torch.ones(3, 2), torch.ones(3, 4))
+    assert output.hidden_states.shape == (6, 2)
+    assert prepare.pad_and_split_input_ids(ids).tolist() == [21, 11, 12, 0, 0, 0]
+    values = torch.tensor([[3, 1], [1, 2], [0, 2], [1, 0], [1, 0], [1, 0]])
+    with adapter.trace_target(runner, scheduler, ids, positions, NS(name="NONE")):
+        for l in layers:
+            adapter.capture_routes(l, values, torch.ones(6, 2), prepare, namespace["_EXTRA_CTX"], NS(), 4)
+            adapter.capture_consumer(l, values)
+    current.close()
+    _, records = collect_run(current.root)
+    assert len(records) == 4
+    assert {r.row.input_row for r, _ in records} == {0, 2}
 
 
 @pytest.mark.parametrize("failure", ["missing_worker", "unfinished", "hash", "all_idle", "missing_coverage"])

@@ -5,6 +5,7 @@
     "vllm_ascend": "0e181fc85fff24db10e5f92f10319c1913e6e9c5"
   },
   "sha256": {
+    "vllm_ascend/ops/fused_moe/moe_utils.py": "2c3dc13f2f7955f0e077df07adf8538929404a8f0af35a0ea9da42d42bcf5b5a",
     "vllm/v1/worker/gpu_input_batch.py": "18cf455c9d0eea61cc581c7932f2e6cd09786914e82dd35eef1c1430da359a0f",
     "vllm/v1/request.py": "da610d5203e72d2d524adc5fb39df11502a23520f2f31d9a44cf13d343f9c25d",
     "vllm/config/scheduler.py": "822179da62be4bca0619c8590082ae09123f5c4415f9cc2037be673748239edb",

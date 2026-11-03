@@ -97,6 +97,18 @@ def main():
     if model_config.get("architectures") != ["DeepseekV4ForCausalLM"]:
         parser.error("requires text-only DeepseekV4ForCausalLM; model directory name is not proof")
     env = os.environ.copy()
+    defaults = {
+        "TASK_QUEUE_ENABLE": "1", "VLLM_RPC_TIMEOUT": "3600000",
+        "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "30000", "HCCL_EXEC_TIMEOUT": "204",
+        "HCCL_CONNECT_TIMEOUT": "120" if args.role == "P" else "1200",
+        "OMP_PROC_BIND": "false", "OMP_NUM_THREADS": "10",
+        "PYTORCH_NPU_ALLOC_CONF": "expandable_segments:True",
+    }
+    for key, value in defaults.items():
+        env.setdefault(key, value)
+    jemalloc = "/usr/lib64/libjemalloc.so.2"
+    if Path(jemalloc).is_file() and jemalloc not in env.get("LD_PRELOAD", "").split(":"):
+        env["LD_PRELOAD"] = jemalloc + (":" + env["LD_PRELOAD"] if env.get("LD_PRELOAD") else "")
     # A baseline must not inherit another tracing overlay/config from the caller.
     if not args.trace and (env.get("MOE_TRACE_V4_DEBUG_CONFIG") or env.get("MOE_TRACE_V41_SOURCE_HOOKS")
                            or env.get("MOE_TRACE_CONFIG") or env.get("MOE_TRACE_QWEN36_CONFIG")
