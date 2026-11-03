@@ -2,6 +2,9 @@
 
 ## 当前结论
 
+DeepSeek V4 两机 P4×4 / D16×1 的同步 eager、无 MTP 采集已通过 CPU 源码方法测试，
+见[V4 采集 CPU 验证](DeepSeekV4采集CPU验证.md)；A3 PD 服务与真实路由待验收。
+
 Qwen3.6 单机 A3 DP8/TP2 的实验采集已完成 CPU 源码接入测试；
 见[采集功能 CPU 验证](Qwen3.6采集功能CPU验证.md)，A3 真机未验收。
 实验版，尚未完成全部可靠性验收。最新完整矩阵见

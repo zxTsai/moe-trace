@@ -8,6 +8,12 @@
 
 ## 支持与状态
 
+**DeepSeek V4 两机 A3 调测入口：**
+[从获取代码、安装到采集与负载分析](docs/guides/DeepSeekV4两机A3快速开始.md)。
+分支 `feature/ascend-deepseek-v4-dp16-tp1`，P DP4/TP4、D DP16/TP1、Mooncake PD，
+D 仅同步 eager、无 MTP 的 Decode；hash/普通路由接入已完成 CPU 验证，**A3 待验收**。
+源码兼容检查通过后才能进入真机调试，不支持原样保留 MTP/异步/图执行的部署。
+
 `main` 统一维护 **vLLM 0.10.1 和 0.29.0**，不必按版本切换 Git 分支；
 两个版本仍需各自的环境、adapter 和补丁。
 

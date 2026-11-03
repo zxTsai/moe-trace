@@ -4,6 +4,11 @@
 
 | 入口 | 职责 |
 | --- | --- |
+| `tools/inspect_ascend_v4.py` | V4 服务包位置、版本、模型和源码摘要只读检查 |
+| `tools/stage_ascend_v4_debug.py` | V4 D16×1 隔离采集副本，保留原安装包 |
+| `deployment/ascend_v4_1p1d_debug.py` | P4×4 / D16×1 调试启动；默认 dry-run，显式执行 |
+| `validation/deepseek_v4_cpu.py` | 实际补丁 Python 方法 CPU 验证与持久化 JSON/CSV |
+| `validation/deepseek_v4_requests.py` | 经 PD proxy 发送三条并发请求，不作为性能压测 |
 | `prepare_environment.py` | 标准库环境准备入口，不必安装工具 |
 | `tools/stage_vllm_029.py` | 手动创建 SHA256/冲突检查后的隔离补丁包 |
 | `tools/stage_ascend_023.py` | 标准库检查/复制两个固定版本的 Ascend 接入包 |

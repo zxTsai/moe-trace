@@ -4,6 +4,8 @@
 
 ## 使用指南
 
+- [DeepSeek V4 两机 A3 快速开始](guides/DeepSeekV4两机A3快速开始.md)：P4×4、D16×1，同步 eager、无 MTP，安装、采集与负载导出；A3 待验收。
+
 - [Qwen3.6 单机 A3 快速开始](guides/Qwen3.6/README.md)：获取代码、环境检查、隔离采集接入、JSON/CSV 汇总与 CPU 验证；A3 待验收。
 - [A3 新手快速使用指南](guides/A3新手快速使用指南.md)：两机 V4.1 1P1D 环境、部署、采集和 JSON 查看（待 A3 真机验收）。
 - [环境准备](guides/environment-setup.md)：版本检测、Conda 隔离、安装确认、失败处理。
@@ -15,6 +17,8 @@
 - [配置说明](../configs/README.md)与[脚本说明](../scripts/README.md)。
 
 ## 需求与设计
+
+- [DeepSeek V4 两机采集适配设计](design/DeepSeekV4两机采集适配设计.md)：独立 patch、hash 路由、16 worker 和输入覆盖校验。
 
 - [Qwen3.6 单机 A3 采集适配设计](design/Qwen3.6单机A3采集适配设计.md)：DP8/TP2、0.23.0.post1 接入与支持边界。
 - [需求和操作边界](requirements.md)：原始开发约定。
