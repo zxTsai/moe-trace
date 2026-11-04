@@ -1,5 +1,11 @@
 # moe-trace
 
+> 当前 `feature/ascend-deepseek-v4-mtp-async-graph` 分支正在适配用户镜像
+> `quay.io/ascend/vllm-ascend:v0.23.0.post1-a3` 的异步、图执行和共享专家多流配置。
+> **目前完成版本调查、设计和只读环境检查，采集接入尚未完成，不能直接启用原配置采集。**
+> 见[适配设计](docs/design/DeepSeekV4保留异步图执行多流的采集设计.md)。
+> 下文同步 eager MTP 功能属于已有实现，不代表本次原配置适配已经完成。
+
 面向 vLLM 的 MoE 专家路由采集工具，将实际模型执行、内部请求、输入 token
 位置、模型层和 Top-K 专家关联起来，支持按执行轮次分析并发请求。
 

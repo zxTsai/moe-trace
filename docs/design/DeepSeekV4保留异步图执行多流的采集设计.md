@@ -26,18 +26,36 @@ MTP eager、异步调度和共享专家多流组合，不能套用旧 adapter �
 
 ## 已确认的源码差异
 
-目前仅有固定参考源码，**不是用户服务器版本已确认**：
-vLLM `ced6857afa0ea7b2e3f0846a62e1394e90f15607`，Ascend
-`0e181fc85fff24db10e5f92f10319c1913e6e9c5`。
+用户已确认运行镜像：`quay.io/ascend/vllm-ascend:v0.23.0.post1-a3`。
+用户随后提供 pip show，确认服务环境为 Python 3.12.13、vLLM `0.23.0+empty`、
+Ascend `0.23.0.post1`，editable 源码分别在 `/vllm-workspace/vllm` 和
+`/vllm-workspace/vllm-ascend`。`+empty` 是构建标识，不表示缺少源码。
+新适配使用该 release 源码，而非旧 MTP 分支的较新参考源码。release 参考为：
+Ascend `1cdb8c4db6e50f36f1fb3283b3e3dd618f6821e8`；
+其 Dockerfile 默认 vLLM v0.23.0，参考提交 `0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665`。
+构建可以覆盖 VLLM_COMMIT，镜像 tag 也不等同于内容摘要，因此仍要核对实际文件。
+不要求用户安装 Git、重拉源码或替换已有镜像。
+
+该 release 的 V4 模型为 `models/deepseek_v4.py`、MTP 为 `models/deepseek_v4_mtp.py`；
+路由在 `quantization/methods/w8a8_dynamic.py` 的 select_experts 之后，
+不存在旧补丁依赖的 `ops/fused_moe/routed_experts.py` 接入结构。
+版本化参考清单保存在 `patches/ascend/deepseek-v4-023post1-async-graph/reference-files.json`。
+只读检查入口为 `scripts/tools/inspect_ascend_async_graph.py`，以实际 import spec 定位为先、
+默认源码目录为后备。不导入 NPU 框架、不执行 Git、不改变服务；
+`reference_source_match=true` 仅是源文件匹配，`adapter_ready=false` 明确表示采集实现未完成。
+该检查器已通过 4 项 CPU 测试，在本地 release 参考源码上 18 个文件摘要全部匹配；
+没有读取 A3 容器的实际文件，不能把本地结果当作服务器文件匹配或采集通过。
+
+以下图/异步/多流接入原则最初从旧参考源码调查而来，需在 release 基线上逐项重新核实：
 
 - `compilation/acl_graph.py`：首次捕获调用 Python runnable，重放调用 graph.replay 并返回
   缓存 output。Python selector hook 不会随每次图重放运行。
-- `compilation/breakable_aclgraph.py`：存在另一图 wrapper 和独立 replay/stream 边界，
-  不能只拦截一个 wrapper 就声称覆盖 NPU graph 扩展。
+- 旧参考有 `compilation/breakable_aclgraph.py`；0.23.0.post1 的图扩展入口需按其实际
+  `enable_npugraph_ex` 分支调查，不能直接照搬旧 wrapper 名称。
 - `worker/model_runner_v1.py`：异步请求状态可能保留 PLACEHOLDER_TOKEN_ID，CPU 请求
   token 数据和采样结果会延后更新，不能直接复用 request.get_token_id 的同步断言。
-- `ops/fused_moe/fused_moe.py` 和 `shared_experts.py`：共享专家通过事件和独立 stream
-  重叠执行，routed 路径还返回 milestones；采集不得改变原返回类型或 event 依赖。
+- 旧参考的 `shared_experts.py`/milestones 在新 release 中结构不同；该 release 的
+  fused_moe.py、fused_moe_0_23_0.py 与 W8A8 路径必须一起核对流依赖和返回类型。
 
 ## 新采集路径
 

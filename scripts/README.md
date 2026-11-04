@@ -4,6 +4,7 @@
 
 | 入口 | 职责 |
 | --- | --- |
+| `tools/inspect_ascend_async_graph.py` | v0.23.0.post1-a3 只读源码指纹核对，无需 Git；不表示原配置采集已实现 |
 | `tools/inspect_ascend_v4_mtp.py` | V4 + MTP 源码/模型只读检查 |
 | `tools/stage_ascend_v4_mtp.py` | 独立 MTP 采集副本，追加 proposer/sampler 接入 |
 | `deployment/ascend_v4_mtp_1p1d.py` | P4×4 / D16×1 动态 K MTP 同步 eager 调试启动，支持 --num-speculative-tokens |

@@ -22,6 +22,8 @@
 
 ## 需求与设计
 
+- [保留异步、图执行和多流的适配设计](design/DeepSeekV4保留异步图执行多流的采集设计.md)：目标镜像 v0.23.0.post1-a3，开发阶段，未完成采集接入。
+
 - [DeepSeek V4 的 MTP 采集设计](design/DeepSeekV4的MTP采集设计.md)：候选产物、实际预测输入、sampler 决策及 scope 完整性。
 
 - [DeepSeek V4 两机采集适配设计](design/DeepSeekV4两机采集适配设计.md)：独立 patch、hash 路由、16 worker 和输入覆盖校验。
