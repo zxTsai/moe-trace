@@ -70,12 +70,12 @@ class DecodeRow:
                 raise IntegrityError("draft mask is not an ordinary vocabulary token")
         else:
             _integer(self.token_id, "token_id")
-        if self.kind not in {"target_decode", "target_verify", "dspark_draft"}:
+        if self.kind not in {"target_decode", "target_verify", "dspark_draft", "mtp_draft"}:
             raise IntegrityError("unsupported execution kind")
         if (self.candidate_round is None) != (self.candidate_node is None):
             raise IntegrityError("candidate round and node must appear together")
         if (self.kind == "target_verify" and self.candidate_node is None
-                and self.input_role != "seed"):
+                and self.input_role not in {"seed", "redacted"}):
             raise IntegrityError("verified candidate needs explicit identity")
         if self.kind == "target_decode" and self.candidate_node is not None:
             raise IntegrityError("ordinary decode cannot label a speculative candidate")

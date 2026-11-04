@@ -1,0 +1,53 @@
+"""Run actual patched V4 Python hooks on CPU and persist JSON/CSV evidence."""
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--vllm-source", type=Path, required=True)
+    parser.add_argument("--ascend-source", type=Path, required=True)
+    parser.add_argument("--output-root", type=Path, required=True)
+    args = parser.parse_args()
+    args.output_root.mkdir(parents=True, exist_ok=True)
+    output = Path(tempfile.mkdtemp(prefix="deepseek-v4-mtp-cpu-", dir=args.output_root.resolve()))
+    env = {**os.environ, "MOE_V4_VLLM_SOURCE": str(args.vllm_source.resolve()),
+           "MOE_V4_ASCEND_SOURCE": str(args.ascend_source.resolve())}
+    result = subprocess.run([sys.executable, "-m", "pytest", "-o", "addopts=", "-q",
+        "tests/test_v4_mtp.py::test_actual_patched_mtp_source_cpu", "--basetemp", str(output / "pytest")],
+        cwd=ROOT, env=env)
+    if result.returncode:
+        return result.returncode
+    runs = [p for p in (output / "pytest").glob("test_actual_patched*/cpu") if not p.parent.is_symlink()]
+    if len(runs) != 1:
+        raise RuntimeError("expected exactly one source-hook CPU trace run")
+    result = subprocess.run([sys.executable, "-m", "moe_trace.distributed.v4_mtp_cli", str(runs[0]),
+        "--output", str(output / "details.json"), "--counts", str(output / "expert-counts.csv"),
+        "--by-execution", str(output / "execution-counts.csv")], cwd=ROOT)
+    if result.returncode:
+        return result.returncode
+    report = {"validation_level": "cpu_patched_source_hooks", "npu_verified": False,
+        "full_service_verified": False, "real_model_loaded": False,
+        "actual_methods": ["patched runner forward block", "All2All.prepare",
+            "AscendRoutedExperts._select_experts", "AscendRoutedExperts.forward_impl", "W8A8 MoE.apply",
+            "MTP set_inputs_first_pass", "patched MTP first-pass forward block",
+            "patched MTP return expression", "runner _sample with sampler-result hook"],
+        "mock_dependencies": ["model forward callback", "router/NPU expert kernels", "distributed groups"],
+        "independent_expected_comparison": "passed", "logical_routes": 17, "expert_choices": {"target": 24, "mtp": 10, "combined": 34},
+        "candidate_states": {"accepted": 1, "rejected": 1, "unverified": 2},
+        "run_dir": str(runs[0]), "details": str(output / "details.json")}
+    (output / "cpu-validation.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
