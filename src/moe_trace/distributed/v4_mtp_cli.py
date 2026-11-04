@@ -63,12 +63,14 @@ def collect(root):
         engine = f"D-v4-mtp-dp-{dp}"
         seen, candidate_map, verifications = set(), {}, {}
         for candidate in produced:
+            candidate.setdefault("round_execution", candidate["producer_execution"])
+            candidate.setdefault("proposal_k", 1)  # original K=1 development traces
             key = (candidate["request"], candidate["candidate_round"], candidate["candidate_node"])
             execution, i = candidate["producer_execution"], candidate["producer_input_row"]
             row = declarations.get(("mtp", execution), {}).get(i)
             if (key in candidate_map or row is None or row["kind"] != "mtp_draft"
-                    or row["request"] != key[0] or candidate["candidate_node"] != "0"
-                    or candidate["candidate_round"] != execution.replace("execution-", "draft-", 1)
+                    or row["request"] != key[0] or not candidate["candidate_node"].isdigit()
+                    or candidate["candidate_round"] != candidate["round_execution"].replace("execution-", "draft-", 1)
                     or candidate["position"] != row["position"] + 2
                     or candidate["producer_kernel_position"] != row["position"]):
                 raise IntegrityError("invalid MTP producer-to-candidate association")
@@ -99,26 +101,66 @@ def collect(root):
             all_routes.append((route, accepted))
         if seen != expected_keys:
             raise IntegrityError("missing MTP/target input-layer coverage")
+        groups = {}
+        for key in candidate_map:
+            groups.setdefault(key[:2], []).append(int(key[2]))
+        for group, nodes in groups.items():
+            if sorted(nodes) != list(range(len(nodes))):
+                raise IntegrityError("missing or duplicate MTP producer node")
+            produced_group = [candidate_map[*group, str(i)] for i in range(len(nodes))]
+            if (any(c["proposal_k"] != len(nodes) for c in produced_group)
+                    or produced_group[0]["round_execution"] != produced_group[0]["producer_execution"]):
+                raise IntegrityError("MTP output ledger lacks configured producer nodes")
+            if any(c["position"] != produced_group[0]["position"]+i for i,c in enumerate(produced_group)):
+                raise IntegrityError("MTP candidate positions are not autoregressive")
+            verified = [i for i in range(len(nodes)) if (*group,str(i)) in verifications]
+            if verified != list(range(len(verified))):
+                raise IntegrityError("verification is not a candidate prefix")
+            decisions = [verifications[*group,str(i)] for i in verified]
+            if any(a[0] != b[0] or a[1]+1 != b[1] for a,b in zip(decisions,decisions[1:])):
+                raise IntegrityError("candidate verification inputs are not contiguous")
+            flags = [d[2] for d in decisions]
+            if flags != sorted(flags,reverse=True):
+                raise IntegrityError("acceptance results are not a prefix")
         for key, candidate in candidate_map.items():
             decision = verifications.get(key)
+            earlier_rejection = any(verifications.get((*key[:2],str(i)), (None,None,True))[2] is False
+                                    for i in range(int(key[2])))
             all_candidates.append({**candidate, "source_engine": engine,
                 "verification_execution": decision[0] if decision else None,
                 "accepted": decision[2] if decision else None,
-                "state": ("accepted" if decision[2] else "rejected") if decision else "unverified"})
+                "state": ("accepted" if decision[2] else "not_adopted" if earlier_rejection else "rejected")
+                         if decision else "unverified"})
     if {r.model_scope for r, _ in all_routes} != {"target", "mtp"}:
         raise IntegrityError("need actual target and MTP routes")
     return all_routes, all_candidates
 
 
+def route_decisions(joined):
+    flags = {}
+    for route, accepted in joined:
+        row = route.row
+        if row.candidate_node is not None:
+            flags[row.global_request,row.candidate_round,row.candidate_node] = accepted
+    decisions = {}
+    for key, flag in flags.items():
+        earlier = any(flags.get((*key[:2],str(i))) is False for i in range(int(key[2])))
+        decisions[key] = "accepted" if flag is True else "not_adopted" if earlier else "rejected"
+    return decisions
+
+
 def analyze(joined):
     totals = dict(target=0, mtp=0, combined=0)
     counts, sizes, executions = Counter(), {}, Counter()
+    decisions = route_decisions(joined)
     for route, accepted in joined:
         scope = route.model_scope
         totals[scope] += len(route.expert_ids)
         totals["combined"] += len(route.expert_ids)
+        if (scope,route.layer) in sizes and sizes[scope,route.layer] != route.num_experts:
+            raise IntegrityError("inconsistent expert count across workers")
         sizes[scope, route.layer] = route.num_experts
-        decision = "accepted" if accepted is True else "rejected" if accepted is False else "not_applicable"
+        decision = decisions.get((route.row.global_request,route.row.candidate_round,route.row.candidate_node),"not_applicable")
         for expert in route.expert_ids:
             counts[scope, route.row.kind, route.layer, decision, expert] += 1
             executions[route.row.source_engine, route.row.execution, scope, route.row.kind, route.layer, expert] += 1
@@ -138,12 +180,15 @@ def main():
             raise IntegrityError("exports must be distinct new paths outside raw run")
         joined, candidates = collect(args.run_dir)
         totals, counts, sizes, executions = analyze(joined)
+        decisions = route_decisions(joined)
         if args.output:
             atomic_json(args.output, {"profile": PROFILE, "npu_verified": False,
                 "validation_level": "a3_unverified_debug", "requests_terminal_verified": False,
                 "decision_semantics": "rejection sampler decision; not client-visible EOS/stop clipping",
                 "expert_choices": totals, "candidates": candidates,
-                "routes": [{**asdict(r), "candidate_accepted": a} for r, a in joined]})
+                "routes": [{**asdict(r), "candidate_accepted": a,
+                    "candidate_decision": decisions.get((r.row.global_request,r.row.candidate_round,r.row.candidate_node))}
+                           for r, a in joined]})
         if args.counts:
             groups = sorted({key[:4] for key in counts})
             with args.counts.open("x", newline="") as stream:

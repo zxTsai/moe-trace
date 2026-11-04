@@ -10,6 +10,6 @@
     "vllm_ascend/ops/fused_moe/routed_experts.py": "cef24daa6298cfab5ebdb16a1d0077a4b8783d81191877c48e93b9931c51552e",
     "vllm_ascend/quantization/methods/w8a8/w8a8_dynamic.py": "a25a1eb1ab76731f99c26f30f39977409f1d91d035a860c19b4d41cfa95862bc",
     "vllm_ascend/worker/worker.py": "807cf01197d0c63782f465b781bfea65a9fcdb1faa97a60c336d3f186367c85a",
-    "vllm_ascend/spec_decode/llm_base_proposer.py": "79a4b681996c76f20c75d234976fecc9caaebd23eb76f1f1999eac4ac2d307f7"
+    "vllm_ascend/spec_decode/llm_base_proposer.py": "a280f442fffc9e84d0a743bb4a1b11ffd260cc3ba7ce7c43361bbff4e1548534"
   }
 }

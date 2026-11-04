@@ -143,6 +143,7 @@ def source_scenario(tmp_path, monkeypatch, privacy=False, omit_result=False, fau
             returns = [node for node in ast.walk(tree) if isinstance(node,ast.Return)
                 and isinstance(node.value,ast.Call) and isinstance(node.value.func,ast.Name)
                 and node.value.func.id=="record_proposals"]
+            returns=[r for r in returns if isinstance(r.value.args[2],ast.Name)]
             assert len(returns)==1
             wrapper=ast.parse("def returned():\n    pass\n")
             wrapper.body[0].body=[returns[0]]
@@ -217,7 +218,9 @@ def test_mtp_runtime_profile_guard():
     runner=runtime()
     runner.vllm_config.speculative_config=NS(method="mtp",num_speculative_tokens=1)
     adapter.check_runtime(runner,NS(name="NONE"))
-    for method_name,k in [("dspark",1),("mtp",2),("eagle",1)]:
+    runner.vllm_config.speculative_config.num_speculative_tokens=3
+    adapter.check_runtime(runner,NS(name="NONE"))
+    for method_name,k in [("dspark",1),("mtp",0),("eagle",1)]:
         runner.vllm_config.speculative_config=NS(method=method_name,num_speculative_tokens=k)
         with pytest.raises(ConfigError):
             adapter.check_runtime(runner,NS(name="NONE"))
@@ -314,7 +317,7 @@ def test_missing_proposal_hook_fails_worker(tmp_path,monkeypatch):
 def test_mixed_zero_and_one_candidate_sampler_batch(tmp_path,monkeypatch):
     runner,_,_,current,_=setup(tmp_path,monkeypatch)
     runner.input_batch=NS(req_ids=["A","B"])
-    current.verifying={"B":{"token_id":23,"candidate_round":"draft-2"}}
+    current.verifying={"B":[{"token_id":23,"candidate_round":"draft-2","candidate_node":"0"}]}
     adapter.record_verification(runner,NS(num_draft_tokens=[0,1],draft_token_ids=torch.tensor([23])),
         NS(sampled_token_ids=torch.tensor([[15,-1],[23,24]])))
     assert not current.verifying and not current.writer.failed

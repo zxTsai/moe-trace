@@ -69,6 +69,17 @@ EDITS["vllm_ascend/spec_decode/llm_base_proposer.py"] = [
      "                return record_proposals(self, draft_token_ids.view(-1, self.num_speculative_tokens),\n"
      "                                        token_indices_to_sample)"),
 ]
+EDITS["vllm_ascend/spec_decode/llm_base_proposer.py"].extend([
+    ("            ret_hidden_states = self.model(**model_kwargs)\n            last_hidden_states, hidden_states",
+     f"            from {HOOK} import trace_draft_next\n"
+     "            with trace_draft_next(self, model_kwargs, batch_size, draft_index + 1,\n"
+     "                                  draft_token_ids_tensor[draft_index], exceeds_max_model_len):\n"
+     "                ret_hidden_states = self.model(**model_kwargs)\n"
+     "            last_hidden_states, hidden_states"),
+    ("        return draft_token_ids\n\n    def set_inputs_first_pass(",
+     f"        from {HOOK} import record_proposals\n"
+     "        return record_proposals(self, draft_token_ids, None)\n\n    def set_inputs_first_pass("),
+])
 
 
 def transform(name, source):

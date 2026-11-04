@@ -113,3 +113,25 @@
  
          # The logits are split and then merged only when lmhead_tp_enable() is enabled.
          # As a result, the batch size length becomes the actual length 32.
+@@ -1706,7 +1714,10 @@
+             if self.pass_hidden_states_to_model:
+                 model_kwargs["hidden_states"] = model_hidden_states
+ 
+-            ret_hidden_states = self.model(**model_kwargs)
++            from moe_trace.adapters.ascend_v4_mtp import trace_draft_next
++            with trace_draft_next(self, model_kwargs, batch_size, draft_index + 1,
++                                  draft_token_ids_tensor[draft_index], exceeds_max_model_len):
++                ret_hidden_states = self.model(**model_kwargs)
+             last_hidden_states, hidden_states = _split_draft_outputs(ret_hidden_states)
+ 
+             num_indices = token_indices_to_sample.shape[0]
+@@ -1740,7 +1751,8 @@
+         draft_token_ids = draft_token_ids_tensor.swapaxes(0, 1)
+         if draft_probs_list is not None:
+             self._last_draft_probs = torch.stack(draft_probs_list, dim=1).contiguous()
+-        return draft_token_ids
++        from moe_trace.adapters.ascend_v4_mtp import record_proposals
++        return record_proposals(self, draft_token_ids, None)
+ 
+     def set_inputs_first_pass(
+         self,

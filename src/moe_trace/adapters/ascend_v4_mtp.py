@@ -48,9 +48,10 @@ def check_runtime(runner, mode):
             or getattr(cfg, "use_v2_model_runner", False)):
         raise ConfigError("MTP capture requires V1 eager synchronous")
     spec = cfg.speculative_config
-    if (spec is None or spec.method != "mtp" or spec.num_speculative_tokens != 1
+    if (spec is None or spec.method != "mtp" or type(spec.num_speculative_tokens) is not int
+            or spec.num_speculative_tokens < 1
             or getattr(spec, "disable_padded_drafter_batch", False)):
-        raise ConfigError("requires one-token MTP with padded drafter batch")
+        raise ConfigError("requires positive MTP K with padded drafter batch")
     if getattr(cfg.model_config.hf_config, "num_nextn_predict_layers", 1) != 1:
         raise ConfigError("first MTP profile requires a single MTP layer")
     p = cfg.parallel_config
@@ -213,23 +214,26 @@ def target_inputs(runner, scheduler, ids, positions, session):
     for index, req in enumerate(reqs):
         count = counts[req]
         candidate = drafts.get(req, [])
-        if type(count) is not int or count < 1 or len(candidate) > 1 or count <= len(candidate):
-            raise ConfigError("unsupported one-token MTP schedule")
+        if (type(count) is not int or count < 1 or count <= len(candidate)
+                or len(candidate) > runner.vllm_config.speculative_config.num_speculative_tokens):
+            raise ConfigError("unsupported MTP schedule")
         start = int(runner.input_batch.num_computed_tokens_cpu[index])
         request = runner.requests[req]
         for local in range(count):
             i, position = offset + local, start + local
             if pos[i] != position or actual[i] < 0:
                 raise IntegrityError("target actual position/token mismatch")
-            is_candidate = bool(candidate) and local == count - 1
-            pending = session.pending.get(req)
+            candidate_index = local - (count - len(candidate))
+            is_candidate = candidate_index >= 0 and bool(candidate)
+            pending_list = session.pending.get(req, [])
+            pending = pending_list[candidate_index] if is_candidate and candidate_index < len(pending_list) else None
             if is_candidate:
-                if (pending is None or actual[i] != candidate[0] or pending["token_id"] != actual[i]
+                if (pending is None or actual[i] != candidate[candidate_index] or pending["token_id"] != actual[i]
                         or pending["position"] != position):
                     raise IntegrityError("candidate differs from actual MTP producer")
-                session.verifying[req] = pending
+                session.verifying.setdefault(req, []).append(pending)
                 kind, role = "target_verify", "sequence"
-                round_id, node = pending["candidate_round"], "0"
+                round_id, node = pending["candidate_round"], pending["candidate_node"]
             else:
                 if request.get_token_id(position) != actual[i]:
                     raise IntegrityError("target sequence token mismatch")
@@ -275,14 +279,17 @@ def trace_proposal_call(function):
         if cfg is None or kwargs.get("scheduler_output") is None:
             return function(proposer, *args, **kwargs)
         session = get_session(proposer.runner, cfg)
-        if kwargs.get("num_speculative_tokens") not in (0, 1):
-            raise ConfigError("only one-token MTP supported")
+        k = kwargs.get("num_speculative_tokens")
+        maximum = proposer.runner.vllm_config.speculative_config.num_speculative_tokens
+        if type(k) is not int or not 0 <= k <= maximum:
+            raise ConfigError("scheduled MTP K outside configured range")
         session.last_draft = None
+        session.draft_steps, session.draft_step_inputs, session.proposal_k = [], [], k
         session.proposal_recorded = False
         token = _proposing.set(session)
         try:
             result = function(proposer, *args, **kwargs)
-            if kwargs.get("num_speculative_tokens") == 1 and not session.proposal_recorded:
+            if k and not session.proposal_recorded:
                 raise IntegrityError("MTP call has no captured producer/output")
             return result
         except BaseException:
@@ -300,7 +307,7 @@ def trace_draft(proposer, model_kwargs, num_tokens, batch_size, sample_indices):
         yield
         return
     runner = proposer.runner
-    if (proposer.method != "mtp" or proposer.num_speculative_tokens != 1
+    if (proposer.method != "mtp" or proposer.num_speculative_tokens != session.proposal_k
             or getattr(proposer, "needs_extra_input_slots", False)
             or getattr(proposer, "use_cuda_graph", False)):
         raise ConfigError("unsupported MTP proposer layout")
@@ -321,6 +328,7 @@ def trace_draft(proposer, model_kwargs, num_tokens, batch_size, sample_indices):
         discarded = set(runner.discard_request_indices.np[:runner.num_discarded_requests].tolist())
         rows, produced = {}, []
         round_id = f"draft-{session.step}"
+        session.round_execution = f"execution-{session.step}"
         for index, req in enumerate(reqs):
             start, end, last = starts[index], starts[index+1], selected[index]
             if not start <= last < end:
@@ -338,12 +346,59 @@ def trace_draft(proposer, model_kwargs, num_tokens, batch_size, sample_indices):
             if last not in rows:
                 raise IntegrityError("MTP candidate producer not in Decode input rows")
             produced.append({"request": req, "candidate_round": round_id, "candidate_node": "0",
+                "round_execution": session.round_execution,
                 "producer_execution": f"execution-{session.step}", "producer_input_row": last,
                 "producer_batch_index": index, "producer_kernel_position": pos[last],
                 "position": pos[last]+2})
         with save_execution(session, rows, "mtp", len(ids)):
             yield
         session.last_draft = produced
+        session.draft_steps.append(produced)
+        session.draft_step_inputs.append({})
+    except BaseException:
+        session.writer.fail()
+        raise
+
+
+@contextmanager
+def trace_draft_next(proposer, model_kwargs, batch_size, step, previous_ids, exceeds):
+    session = _proposing.get()
+    if session is None:
+        yield
+        return
+    session.step += 1
+    try:
+        if _active.get() is not None or step != len(session.draft_steps) or not 0 < step < session.proposal_k:
+            raise IntegrityError("missing, duplicate or nested MTP draft step")
+        runner = proposer.runner
+        reqs = list(runner.input_batch.req_ids)
+        ids, positions = model_kwargs["input_ids"], model_kwargs["positions"]
+        if ids.ndim != 1 or positions.shape != ids.shape or len(ids) < len(reqs) or batch_size < len(reqs):
+            raise IntegrityError("invalid later MTP input shape")
+        actual, pos = ids.detach().cpu().tolist(), positions.detach().cpu().tolist()
+        previous = previous_ids.detach().cpu().tolist()
+        if any(exceeds[:len(reqs)].detach().cpu().tolist()):
+            raise ConfigError("MTP position clamped at model length; capture cannot attribute dummy input")
+        first = {item["request"]: item for item in session.draft_steps[0]}
+        rows, produced, input_tokens = {}, [], {}
+        for index, req in enumerate(reqs):
+            if req not in first:  # discarded/prefill request, not a Decode candidate producer
+                continue
+            base = first[req]
+            if (actual[index] != previous[index] or pos[index] != base["producer_kernel_position"] + step
+                    or actual[index] < 0):
+                raise IntegrityError("later MTP token/position differs from predecessor")
+            input_tokens[req] = actual[index]
+            rows[index] = DecodeRow(engine(session), f"execution-{session.step}", session.step,
+                f"{engine(session)}:{req}", req, index, pos[index], actual[index], "mtp_draft", input_role="context")
+            produced.append({"request": req, "candidate_round": base["candidate_round"],
+                "candidate_node": str(step), "round_execution": session.round_execution,
+                "producer_execution": f"execution-{session.step}", "producer_input_row": index,
+                "producer_batch_index": index, "producer_kernel_position": pos[index], "position": pos[index]+2})
+        with save_execution(session, rows, "mtp", len(ids)):
+            yield
+        session.draft_steps.append(produced)
+        session.draft_step_inputs.append(input_tokens)
     except BaseException:
         session.writer.fail()
         raise
@@ -357,22 +412,29 @@ def record_proposals(proposer, output, sample_indices):
         values = output.detach().cpu().tolist()
         if session.proposal_recorded:
             raise IntegrityError("duplicate MTP output hook")
-        if session.last_draft is None or output.ndim != 2 or output.shape[1] != 1:
-            raise IntegrityError("MTP output lacks unique producer forward")
+        if (session.last_draft is None or output.ndim != 2 or output.shape[1] != session.proposal_k
+                or len(session.draft_steps) != session.proposal_k):
+            raise IntegrityError("MTP output lacks every actual producer step")
         if len(values) < len(proposer.runner.input_batch.req_ids):
             raise IntegrityError("MTP output batch too short")
-        for item in session.last_draft:
-            if int(sample_indices[item["producer_batch_index"]]) != item["producer_input_row"]:
-                raise IntegrityError("MTP sampled output order differs from producer")
-            token_id = values[item["producer_batch_index"]][0]
-            if type(token_id) is not int or token_id < 0:
-                raise IntegrityError("invalid MTP output token")
-            pending = dict(item, token_id=token_id)
-            session.pending[item["request"]] = pending
-            saved = dict(pending)
-            if not session.cfg["save_token_ids"]:
-                saved["token_id"] = None
-            session.write_ledger("candidates", saved)
+        new_pending = {}
+        for step, produced in enumerate(session.draft_steps):
+            for item in produced:
+                index, req = item["producer_batch_index"], item["request"]
+                if session.proposal_k == 1 and int(sample_indices[index]) != item["producer_input_row"]:
+                    raise IntegrityError("MTP sampled output order differs from producer")
+                if step and session.draft_step_inputs[step][req] != values[index][step-1]:
+                    raise IntegrityError("MTP output matrix differs from actual next-step input")
+                token_id = values[index][step]
+                if type(token_id) is not int or token_id < 0:
+                    raise IntegrityError("invalid MTP output token")
+                pending = dict(item, token_id=token_id, proposal_k=session.proposal_k)
+                new_pending.setdefault(req, []).append(pending)
+                saved = dict(pending)
+                if not session.cfg["save_token_ids"]:
+                    saved["token_id"] = None
+                session.write_ledger("candidates", saved)
+        session.pending.update(new_pending)
         for req in set(session.pending) - set(proposer.runner.requests):
             del session.pending[req]
         session.proposal_recorded = True
@@ -399,22 +461,21 @@ def record_verification(runner, metadata, sampler_output):
         if expected != set(session.verifying):
             raise IntegrityError("sampler candidates differ from executed verification")
         for req, k, sampled in zip(reqs, lengths, samples):
-            if k not in (0, 1):
-                raise ConfigError("only single-token rejection sampling supported")
             if not k:
                 continue
-            candidate = session.verifying[req]
-            if offset >= len(draft_ids) or draft_ids[offset] != candidate["token_id"]:
+            candidates = session.verifying[req]
+            if k != len(candidates) or draft_ids[offset:offset+k] != [c["token_id"] for c in candidates]:
                 raise IntegrityError("sampler draft token differs from MTP candidate")
-            offset += 1
+            offset += k
             valid = [v for v in sampled if v >= 0]
-            if len(valid) not in (1, 2) or sampled[:len(valid)] != valid:
+            if not 1 <= len(valid) <= k+1 or sampled[:len(valid)] != valid or any(v < -1 for v in sampled):
                 raise IntegrityError("invalid rejection sampler output layout")
-            accepted = len(valid) == 2
-            if accepted and valid[0] != candidate["token_id"]:
+            accepted_count = len(valid)-1
+            if valid[:accepted_count] != [c["token_id"] for c in candidates[:accepted_count]]:
                 raise IntegrityError("accepted prefix differs from candidate")
-            session.writer.append(CandidateResult(f"{engine(session)}:{req}", engine(session),
-                candidate["candidate_round"], "0", accepted))
+            for node, candidate in enumerate(candidates):
+                session.writer.append(CandidateResult(f"{engine(session)}:{req}", engine(session),
+                    candidate["candidate_round"], candidate["candidate_node"], node < accepted_count))
             session.pending.pop(req, None)
         if offset != len(draft_ids):
             raise IntegrityError("extra sampler draft IDs")

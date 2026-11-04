@@ -14,7 +14,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def commands(role, model, address, base_port=7100, rpc_port=12321):
+def commands(role, model, address, base_port=7100, rpc_port=12321, num_speculative_tokens=1):
     dp, tp = (4, 4) if role == "P" else (16, 1)
     kv = {"kv_connector": "MooncakeHybridConnector", "kv_role": "kv_producer" if role == "P" else "kv_consumer",
           "kv_port": "30000" if role == "P" else "30100", "engine_id": "0" if role == "P" else "1",
@@ -39,7 +39,7 @@ def commands(role, model, address, base_port=7100, rpc_port=12321):
                 "--model-loader-extra-config", '{"enable_multithread_load":true,"num_threads":128}',
                 "--safetensors-load-strategy", "prefetch", "--gpu-memory-utilization", "0.9",
                 "--quantization", "ascend", "--enforce-eager", "--no-async-scheduling",
-                "--speculative-config", '{"method":"mtp","num_speculative_tokens":1,"enforce_eager":true}',
+                "--speculative-config", json.dumps({"method":"mtp", "num_speculative_tokens":num_speculative_tokens, "enforce_eager":True}),
                 "--no-enable-prefix-caching", "--no-disable-hybrid-kv-cache-manager",
                 "--compilation-config", '{"cudagraph_mode":"NONE"}',
                 "--additional-config", json.dumps(additional), "--kv-transfer-config", json.dumps(kv)]
@@ -71,6 +71,7 @@ def main():
     parser.add_argument("--nic", required=True)
     parser.add_argument("--base-port", type=int, default=7100)
     parser.add_argument("--rpc-port", type=int, default=12321)
+    parser.add_argument("--num-speculative-tokens", type=int, default=1, help="maximum MTP candidate count K")
     parser.add_argument("--overlay", type=Path)
     parser.add_argument("--output-root", type=Path, default=Path("outputs/v4-mtp"))
     parser.add_argument("--node-id", default="D0")
@@ -87,7 +88,9 @@ def main():
         parser.error("invalid ports")
     if args.base_port <= args.rpc_port < args.base_port + (4 if args.role == "P" else 16):
         parser.error("RPC port overlaps API ports")
-    tasks = commands(args.role, args.model.resolve(), args.local_ip, args.base_port, args.rpc_port)
+    if args.num_speculative_tokens < 1:
+        parser.error("--num-speculative-tokens must be positive")
+    tasks = commands(args.role, args.model.resolve(), args.local_ip, args.base_port, args.rpc_port, args.num_speculative_tokens)
     if not args.execute:
         print(json.dumps({"profile": "deepseek-v4-mtp-debug", "execute": False, "trace": args.trace,
                           "npu_verified": False, "tasks": tasks}, indent=2))
