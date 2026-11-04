@@ -9,9 +9,9 @@
 ## 支持与状态
 
 **DeepSeek V4 + MTP 调测入口：** [开启 MTP 的采集指南](docs/guides/DeepSeekV4开启MTP采集指南.md)。
-独立分支 `feature/ascend-deepseek-v4-mtp`，D DP16/TP1、单候选 MTP、同步 eager；
+独立分支 `feature/ascend-deepseek-v4-mtp`，D DP16/TP1、动态 K 候选 MTP、同步 eager；
 区分主模型 Decode/验证和 MTP 预测，保留接受/拒绝及未验证候选，分别汇总专家选择次数。
-CPU 接入验证通过，A3 待验收；不同时支持图、异步或多候选 MTP。
+CPU 接入验证通过，A3 待验收；按实际 K 逐步采集，不同时支持图或异步。
 
 **DeepSeek V4 两机 A3 调测入口：**
 [从获取代码、安装到采集与负载分析](docs/guides/DeepSeekV4两机A3快速开始.md)。

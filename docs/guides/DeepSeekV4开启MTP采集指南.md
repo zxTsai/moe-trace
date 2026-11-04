@@ -7,8 +7,8 @@
 
 - P 节点 DP4/TP4、D 节点 DP16/TP1，每节点 16 die，EP 和 MooncakeHybridConnector。
 - 文本 DeepseekV4ForCausalLM，Ascend W8A8，单个 MTP 层。
-- MTP `num_speculative_tokens=1`；两端同步 eager，D 关闭图、异步、FlashComm、多流和 EPLB。
-- 仅 D 采集；不支持多步 MTP、DSpark、图/异步模式、PP/CP 或多模态。
+- MTP `num_speculative_tokens=K`，按实际执行采集；两端同步 eager，D 关闭图、异步、FlashComm、多流和 EPLB。
+- 仅 D 采集；不支持 DSpark、图/异步模式、PP/CP 或多模态。
 
 本版增加 MTP，不恢复原生产启动命令中的 `--async-scheduling`、FULL_DECODE_ONLY
 和 shared-expert 多流。需要重启 D 加载独立源码副本；不能附加到已运行的服务。
@@ -48,6 +48,7 @@ D 容器：
 ```bash
 export MODEL=/data/c00835156/model/Eco-Tech--DeepSeek-V4-Flash-w8a8-mtp/snapshots/master
 export TRACE_ROOT=/trace-output/deepseek-v4-mtp
+export MTP_K=3  # 设为模型/框架允许的正整数；两节点分别设置
 mkdir -p "$TRACE_ROOT"
 python scripts/tools/inspect_ascend_v4_mtp.py --model "$MODEL" \
   > "$TRACE_ROOT/environment-check.json"
@@ -74,17 +75,17 @@ OVERLAY 填打印的实际目录。副本包括 runner、selector、W8A8、worke
 ```bash
 # P：IP、网卡和模型路径改为实际值
 python scripts/deployment/ascend_v4_mtp_1p1d.py \
-  --role P --model "$MODEL" --local-ip 10.44.231.172 --nic enp196s0f0
+  --role P --model "$MODEL" --local-ip 10.44.231.172 --nic enp196s0f0 --num-speculative-tokens "$MTP_K"
 
 # D：在 D 容器运行
 python scripts/deployment/ascend_v4_mtp_1p1d.py \
-  --role D --model "$MODEL" --local-ip 10.44.231.202 --nic enp196s0f0
+  --role D --model "$MODEL" --local-ip 10.44.231.202 --nic enp196s0f0 --num-speculative-tokens "$MTP_K"
 ```
 
-启动器显式添加：
+启动器显式添加（以 MTP_K=3 为例，实际使用所设 K）：
 
 ```text
---speculative-config '{"method":"mtp","num_speculative_tokens":1,"enforce_eager":true}'
+--speculative-config '{"method":"mtp","num_speculative_tokens":3,"enforce_eager":true}'
 --enforce-eager --no-async-scheduling
 --compilation-config '{"cudagraph_mode":"NONE"}'
 ```
@@ -98,7 +99,7 @@ PD proxy 的端点配置与非 MTP 指南一致。请求必须经过 proxy，不
 
 ```bash
 python scripts/deployment/ascend_v4_mtp_1p1d.py \
-  --role D --model "$MODEL" --local-ip 10.44.231.202 --nic enp196s0f0 \
+  --role D --model "$MODEL" --local-ip 10.44.231.202 --nic enp196s0f0 --num-speculative-tokens "$MTP_K" \
   --trace --overlay "$OVERLAY" --output-root "$TRACE_ROOT/runs" \
   --node-id D0 --execute
 ```
@@ -133,7 +134,7 @@ python -m moe_trace.distributed.v4_mtp_cli "$TRACE_ROOT/runs/RUN_UUID" \
 | `row.kind=mtp_draft` | MTP 模型实际计算的输入，可含多行上下文；不是该次预测出的 token |
 | `model_scope` | `target` 或 `mtp`，同号层不会混合 |
 | `source_engine, execution, input_row` | D 引擎、真实执行、实际输入行；不同 DP 的 execution 不代表同一全局时间 |
-| `candidate_round, candidate_node` | 候选轮次和节点；第一版每轮每请求 node=0 |
+| `candidate_round, candidate_node` | 候选轮次和节点；每轮每请求 node=0..实际K-1 |
 | `candidate_accepted` | 候选验证路由的 sampler 决定；false 的路由仍完整保留 |
 
 MTP 的实际 input_ids 比 target 左移一位，但送入 kernel 的 positions 沿用原 target
@@ -143,12 +144,13 @@ position+1，预测候选位置为被采样输入 position+2。输入声明和 c
 
 JSON 的 `candidates` 单独保存 request/source_engine、round/node、producer_execution、
 producer_input_row、producer_kernel_position、候选位置、可选 token ID、验证 execution 和状态。
-状态为 accepted/rejected/unverified；未被调度验证的末轮候选、取消后的候选不被误标为拒绝。
+状态为 accepted/rejected/not_adopted/unverified；未被调度验证的末轮候选、取消后的候选不被误标为拒绝。
 同 token ID 在不同轮次出现时仍按候选轮次和位置关联。
 
 决定直接来自 rejection sampler 的实际输出及 SpecDecodeMetadata，**不是根据客户端输出
-长度猜测**。第一版 K=1：两枚有效 sampler 输出代表接受，一枚代表拒绝，接受前缀还须
-与候选 ID 一致。它不等于经过 EOS/stop/长度裁剪后最终返回客户端的状态。
+长度猜测**。实际有效 sampler 输出数减一是接受前缀长度，还会逐个核对前缀 token ID。
+首个未接受候选标 rejected，其后标 not_adopted（后续未采用），已经发生的路由都保留。
+`candidate_accepted:false` 表示未接受，细分原因查看 `candidate_decision`。它不等于经过 EOS/stop/长度裁剪后最终返回客户端的状态。
 
 ## 7. 负载统计怎么看
 
@@ -158,7 +160,7 @@ JSON 的 `expert_choices` 给出：
 {"target":24,"mtp":10,"combined":34}
 ```
 
-上面是 CPU mock 样例：17 条 token/层路由，主模型 24 次选择、MTP 10 次，合计 34 次；
+上面是原 K=1 CPU mock 样例：17 条 token/层路由，主模型 24 次选择、MTP 10 次，合计 34 次；
 1 个候选接受、1 个拒绝、2 个末轮未验证。被拒绝候选仍贡献主模型的 4 次专家选择。
 它不是 DeepSeek 真模型的负载结论，真实数字取决于请求与执行。
 
@@ -183,6 +185,10 @@ dp-N-tp-0/
 `npu_verified:false` 保留，真实设备路由正确性和完整 PD 服务仍待现场验收。
 没有 P/proxy 全局请求映射或请求完成/取消原因采集。
 
+K=3 CPU 样例另得到 26 条路由，target=40、mtp=12、combined=52；
+两个请求各接受第 0 个候选，第 1 个拒绝，第 2 个未采用。单个物理 MTP 层实际执行三次，
+每次独立执行 ID。不是按 K 虚增计数，而是读取三次执行的真实返回。
+
 ## 8. 常见失败与 CPU 复验
 
 - 源码不匹配：保留 MTP environment-check.json，提供真实提交适配，不要强行修改摘要。
@@ -197,7 +203,7 @@ CPU 开发环境中可重复执行：
 python scripts/validation/deepseek_v4_mtp_cpu.py \
   --vllm-source /YOUR_REFERENCE/vllm \
   --ascend-source /YOUR_REFERENCE/vllm-ascend \
-  --output-root outputs/v4-mtp-cpu
+  --output-root outputs/v4-mtp-cpu --k 3
 ```
 
 不要在 A3 服务环境安装 CPU PyTorch。具体方法、mock 边界与结果见

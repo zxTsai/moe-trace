@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-DeepSeek V4 单候选 MTP 的 CPU 源码方法接入与接受/拒绝负载关联见
+DeepSeek V4 动态 K 候选 MTP 的 CPU 源码方法接入与接受/拒绝负载关联见
 [MTP 采集 CPU 验证](DeepSeekV4的MTP采集CPU验证.md)；真实 A3/PD 服务待验收。
 
 DeepSeek V4 两机 P4×4 / D16×1 的同步 eager、无 MTP 采集已通过 CPU 源码方法测试，

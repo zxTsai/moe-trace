@@ -4,7 +4,7 @@
 
 ## 使用指南
 
-- [DeepSeek V4 开启 MTP 采集](guides/DeepSeekV4开启MTP采集指南.md)：单候选 MTP、主模型验证、接受/拒绝关联和分模型负载；A3 待验收。
+- [DeepSeek V4 开启 MTP 采集](guides/DeepSeekV4开启MTP采集指南.md)：动态 K 候选 MTP、主模型验证、接受/拒绝关联和分模型负载；A3 待验收。
 
 - [DeepSeek V4 两机 A3 快速开始](guides/DeepSeekV4两机A3快速开始.md)：P4×4、D16×1，同步 eager、无 MTP，安装、采集与负载导出；A3 待验收。
 

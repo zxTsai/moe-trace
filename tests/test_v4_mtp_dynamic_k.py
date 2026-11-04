@@ -181,3 +181,14 @@ def test_launcher_accepts_configured_k():
         for task in launcher.commands("D","/model","192.0.2.1",num_speculative_tokens=k):
             argv=task["command"]
             assert json.loads(argv[argv.index("--speculative-config")+1])["num_speculative_tokens"]==k
+
+
+def test_requested_k_from_environment(tmp_path,monkeypatch):
+    k=int(os.environ.get("MOE_MTP_VALIDATION_K","3"))
+    assert k>0
+    accepted=k//2
+    run=scenario(tmp_path,monkeypatch,k,(accepted,accepted))
+    joined,candidates=collect(run)
+    assert len(joined)==8+6*k
+    assert analyze(joined)[0]==dict(target=8*k+16,mtp=4*k,combined=12*k+16)
+    assert len(candidates)==2*k

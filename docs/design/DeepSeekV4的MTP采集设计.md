@@ -23,8 +23,8 @@ CPU 增加 K=2/3、接受 0/部分/全部、K=0、裁短验证、同 ID 不同�
 ## 首阶段支持范围
 
 两机 A3 P4/TP4、D16/TP1、Ascend W8A8、MooncakeHybridConnector；D V1、同步 eager，
-`method=mtp,num_speculative_tokens=1`，单个 MTP 层。不同时开放图/异步、多步 MTP、
-DSpark、动态 K、CP/PP 或多模态。服务器实际版本仍未知，沿用 V4 已验证的固定源码并
+`method=mtp,num_speculative_tokens=K`，单个物理 MTP 层按实际 K 重复执行。不同时开放图/异步、
+DSpark、CP/PP 或多模态。服务器实际版本仍未知，沿用 V4 已验证的固定源码并
 增加 MTP proposer、metadata、sampler 等文件摘要。不同源码必须先适配，不能跳过检查。
 
 ## 源码事实与采集语义
@@ -43,7 +43,7 @@ Ascend `llm_base_proposer._run_merged_draft` 首次 forward 可含多行上下�
 
 `_run_merged_draft` 返回实际 draft IDs 后登记候选；下一次 target 输入必须与登记匹配。
 在 rejection_sampler 返回后直接读取实际 sampled_token_ids 与 SpecDecodeMetadata：
-K=1 时两枚有效输出表示接受，一枚表示拒绝；校验接受前缀值等于候选，不自行采样。
+有效输出长度减一表示接受前缀长度；逐一校验前缀值等于候选，不自行采样。
 不依赖后续截断、EOS、请求输出长度；标注这是 sampler 决策，不是客户端最终保留状态。
 未被调度验证的候选保持 unverified，不把取消/停机误标成拒绝。
 

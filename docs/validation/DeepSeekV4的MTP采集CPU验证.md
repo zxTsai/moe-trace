@@ -3,14 +3,43 @@
 日期：2026-11-04。分支：`feature/ascend-deepseek-v4-mtp`。
 功能检查点：`37afd67`。基于非 MTP V4 `9a527d5`，原版本保留。
 
+## 动态 K 扩展验证
+
+动态 K 功能检查点：`aad5a0e`。不再写死 K=1；启动器支持 `--num-speculative-tokens K`，
+CPU 复验支持 `--k K`。从真实补丁源码提取并执行完整 autoregressive for 循环，
+覆盖 K=1/2/3 的每种接受前缀、K=7 的部分接受、K=0 不预测、裁短验证和不同请求接受长度。
+额外任意正整数 K 可通过 CPU 脚本的 `--k` 参数复验，不安装/升级服务依赖。
+
+最新动态 K 测试新增 **18 项**，MTP 相关合计 **35 项通过**；全仓库回归
+**350 passed in 21.60s，无跳过**。补丁应用检查、K=3 启动 dry-run、源码摘要和
+`git diff --check` 通过。全部是 CPU/软件接入验证，不是 A3 或完整 PD 验收。
+
+K=3 的本地持久化证据：`outputs/v4-mtp-cpu/deepseek-v4-mtp-cpu-l5wnawd3/`。
+两个请求各提出 3 个候选、各接受第一个，第二个拒绝，第三个未采用；
+共 26 条路由、target=40、mtp=12、combined=52 次专家选择。
+candidate_node 为 0/1/2，三个预测步骤均有独立执行和 producer；后缀路由仍保留。
+输出包含 accepted/rejected/not_adopted/unverified 四种状态，CSV 不把后缀说成独立拒绝。
+
+动态测试完整执行真实 Python for 循环和 buffer/position 更新，模型/路由/采样输出仍 mock。
+缺少后续 step、前后 token/输出矩阵不一致、位置钳制到 dummy 坐标均拒绝。
+一个物理 MTP 层重复执行 K 次；多个物理 MTP 层、图、异步、CP 等边界没有因此开放。
+
+```bash
+conda run --no-capture-output -n moe-ascend-cpu \
+  python scripts/validation/deepseek_v4_mtp_cpu.py \
+    --vllm-source /tmp/moe-trace-vllm-v41-source \
+    --ascend-source /tmp/moe-trace-ascend-v41-source \
+    --output-root outputs/v4-mtp-cpu --k 3
+```
+
 ## 结论与证据范围
 
-单候选 MTP 的真实 Python 接入、三类轨迹、候选生产/接受/拒绝关联、16-worker
+动态 K MTP 的真实 Python 接入、三类轨迹、候选生产/接受前缀关联、16-worker
 汇总和分 scope 负载导出已在 CPU 执行。未加载真实模型、torch_npu、HCCL、Mooncake，
 未运行两台 A3 PD 服务。服务器实际提交仍待确认；不能据此宣称真实硬件验收。
 
-MTP 专用测试 **17 项通过，无跳过**；完整仓库回归 **332 passed in 14.76s，无跳过**。
-完整回归包含旧版本测试，不代表 332 项都是 MTP 测试。
+初始 K=1 开发检查点曾有 **17 项通过**、完整仓库 **332 passed in 14.76s，无跳过**。
+这些保留为初始历史证据，不是动态 K 的最新测试数量。
 补丁 `git apply --check`、固定源码 inventory、P/D dry-run 和 `git diff --check` 通过。
 
 固定源码与非 MTP 参考提交相同，额外核对 MTP 模型、proposer、sampler 和 metadata。
@@ -52,7 +81,7 @@ DP0 活跃，另外 15 worker 空闲初始化和收尾。target 两层 0/1，mtp
 
 ## 异常和完整性
 
-MTP K>1/其他预测方法拒绝；launcher 固定 K1、同步 eager 和两机拓扑。
+其他预测方法拒绝；launcher 读取 K，保持同步 eager 和两机拓扑。
 错误候选 token、错误 sampler draft ID/接受前缀、sample index 跨请求均标 worker failed。
 缺预测输出 hook、缺验证结果、重复 sampler 决策拒绝；不会把缺结果当拒绝。
 覆盖带/不带候选混合 batch，关闭采集和 dummy 不触发采集。

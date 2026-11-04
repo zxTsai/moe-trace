@@ -1,4 +1,4 @@
-"""DeepSeek V4 D-side single-token MTP capture; A3 acceptance pending."""
+"""DeepSeek V4 D-side runtime-K MTP capture; A3 acceptance pending."""
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
