@@ -75,7 +75,8 @@ def main():
         if args.check:
             print(json.dumps({"launch_check": "passed", "origins": origins, "npu_verified": False}))
             return 0
-        print("moe-trace: debug capture enabled; original command unchanged; device synchronization reduces throughput.", flush=True)
+        mode=json.loads(args.config.read_text()).get("mode","trace")
+        print(f"moe-trace: {mode} capture enabled; original command unchanged; capture has additional overhead.", flush=True)
         os.execvpe(command[0], command, environment)
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f"{exc}\n")

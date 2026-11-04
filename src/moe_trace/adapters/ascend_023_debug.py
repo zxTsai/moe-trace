@@ -31,9 +31,28 @@ def config():
     if not name:
         return None
     value = json.loads(Path(name).read_text())
+    if value.get("mode") == "summary":
+        required = {"mode", "output_root", "run_id", "node_id", "interval_seconds", "max_file_bytes", "max_files"}
+        if set(value) != required:
+            raise ValueError("unexpected summary config keys")
+        interval = value["interval_seconds"]
+        if type(interval) not in (int,float) or not 0.05 <= interval <= 3600:
+            raise ValueError("interval_seconds must be between 0.05 and 3600")
+        if type(value["max_files"]) is not int or not 1 <= value["max_files"] <= 100:
+            raise ValueError("max_files must be between 1 and 100")
+        for key in ("output_root", "run_id", "node_id"):
+            if not isinstance(value[key],str) or not value[key]:
+                raise ValueError(f"invalid summary {key}")
+        if not Path(value["output_root"]).is_absolute() or any(not re.fullmatch(r"[A-Za-z0-9_-]+",value[k]) for k in ("run_id","node_id")):
+            raise ValueError("unsafe summary output identity")
+        if type(value["max_file_bytes"]) is not int or value["max_file_bytes"] < 1:
+            raise ValueError("max_file_bytes must be positive")
+        if any(os.environ.get(key) for key in ("MOE_TRACE_CONFIG", "MOE_TRACE_V4_MTP_CONFIG", "MOE_TRACE_V4_DEBUG_CONFIG", "MOE_TRACE_QWEN36_CONFIG", "MOE_TRACE_V41_DEBUG_CONFIG")):
+            raise ValueError("cannot combine capture adapters")
+        return dict(value,save_token_ids=False,save_expert_weights=False)
     required = {"output_root", "run_id", "node_id", "save_token_ids", "save_expert_weights",
                 "max_executions", "max_file_bytes"}
-    if set(value) != required:
+    if value.get("mode","trace") != "trace" or set(value) not in (required, required|{"mode"}):
         raise ValueError("unexpected Ascend 0.23 debug config keys")
     for key in ("run_id", "node_id"):
         if not isinstance(value[key], str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value[key]):
@@ -189,17 +208,24 @@ def initialize(runner):
     ranks = dict(dp=dp.rank_in_group, tp=tp.rank_in_group, ep=ep.rank_in_group)
     import torch
     ranks["device"] = int(torch.npu.current_device())
-    _session = Session(runner, cfg, ranks)
-    arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8, synchronize)
+    if cfg.get("mode") == "summary":
+        from .ascend_load_summary import SummarySession
+        _session = SummarySession(runner,cfg,ranks)
+        arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8)
+    else:
+        _session = Session(runner, cfg, ranks)
+        arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8, synchronize)
     atexit.register(close)
 
 
 def close():
     global _session
-    if _session is not None:
-        _session.close()
+    try:
+        if _session is not None:
+            _session.close()
+    finally:
         _session = None
-    arm_graph_capture(None)
+        arm_graph_capture(None)
 
 
 def capture_routes(layer, ids, weights, prepare, num_experts, forbidden=False):
@@ -328,6 +354,11 @@ def trace_target(runner, scheduler, ids, positions, mode):
     if session is None or session.capped:
         yield
         return
+    if getattr(session,"mode",None) == "summary":
+        from .ascend_load_summary import capture_forward, target_masks
+        with capture_forward(session,"target",target_masks(runner,scheduler,positions)):
+            yield
+        return
     session.scheduler_step += 1
     requests, prompts = request_snapshot(runner)
     counts = dict(scheduler.num_scheduled_tokens)
@@ -350,6 +381,9 @@ def trace_sample(function):
         result = function(runner, logits, spec_decode_metadata)
         session = _session
         if session is None or session.capped:
+            return result
+        if getattr(session,"mode",None) == "summary":
+            session.check()
             return result
         try:
             target = session.current_target
@@ -407,6 +441,13 @@ def trace_proposal(function):
         bound = signature.bind(proposer, *args, **kwargs)
         if bound.arguments.get("scheduler_output") is None:
             return function(proposer, *args, **kwargs)  # dummy/profiling proposal
+        if getattr(session,"mode",None) == "summary":
+            token = _proposal.set(True)
+            try:
+                session.check()
+                return function(proposer,*args,**kwargs)
+            finally:
+                _proposal.reset(token)
         requests, prompts = request_snapshot(proposer.runner)
         state = dict(requests=requests, prompts=prompts, forwards=[], step=0)
         token = _proposal.set(state)
@@ -466,6 +507,11 @@ def trace_mtp_forward(proposer, model_kwargs, num_tokens, batch_size, sample_ind
     session, proposal = _session, _proposal.get()
     if session is None or session.capped or proposal is None:
         yield
+        return
+    if getattr(session,"mode",None) == "summary":
+        from .ascend_load_summary import capture_forward, mtp_masks
+        with capture_forward(session,"mtp",mtp_masks(proposer,model_kwargs,num_tokens,batch_size,sample_indices,step)):
+            yield
         return
     requests = proposal["requests"]
     # These small metadata tensors are frozen before the original forward.

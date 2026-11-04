@@ -23,6 +23,7 @@ def main():
     command = [sys.executable, "-m", "pytest", "-o", "addopts=", "-q",
         "tests/test_ascend_023_source.py", "tests/test_ascend_023_debug.py",
         "tests/test_ascend_graph_bridge.py", "tests/test_graph_routes.py", "tests/test_ascend_async_inventory.py",
+        "tests/test_ascend_load_summary.py",
         "--basetemp", str(output / "pytest")]
     result = subprocess.run(command, cwd=ROOT, env=environment, capture_output=True, text=True)
     (output/"pytest.log").write_text(result.stdout+result.stderr)

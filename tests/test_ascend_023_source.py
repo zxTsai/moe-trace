@@ -96,8 +96,17 @@ def test_actual_runner_forward_w8a8_and_sampler(setup, overlay):
 
 
 @pytest.mark.parametrize("k", [1,2,3])
-def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k):
+@pytest.mark.parametrize("summary_mode", [False,True])
+def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summary_mode,monkeypatch):
     runner, session = setup
+    if summary_mode:
+        from moe_trace.adapters.ascend_load_summary import SummarySession
+        session=SummarySession(runner,dict(session.cfg,mode="summary",run_id="summary-source",
+            save_token_ids=False,save_expert_weights=False,interval_seconds=5,max_files=4),
+            dict(dp=0,tp=0,ep=0),start_thread=False)
+        monkeypatch.setattr(adapter,"_session",session)
+        monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("summary must not synchronize per forward"))
+        monkeypatch.setattr(adapter,"host",lambda *args:pytest.fail("summary must not read per-token host data"))
     runner.vllm_config.model_config.max_model_len=100
     runner.vllm_config.speculative_config.num_speculative_tokens=k
     path=overlay/"vllm_ascend/spec_decode/llm_base_proposer.py"
@@ -136,10 +145,11 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k):
     values=proposal(proposer,scheduler_output=object())
     assert values.tolist()==[list(range(21,21+k)),list(range(31,31+k))]
     assert proposer.model.calls==k
-    recorded=events(session)
-    assert len([e for e in recorded if e["type"]=="execution"])==k
-    assert recorded[-1]["type"]=="proposal" and len(recorded[-1]["candidates"])==2*k
-    assert [c["token_position"] for c in recorded[-1]["candidates"] if c["request_id"]=="A"]==list(range(4,4+k))
+    if not summary_mode:
+        recorded=events(session)
+        assert len([e for e in recorded if e["type"]=="execution"])==k
+        assert recorded[-1]["type"]=="proposal" and len(recorded[-1]["candidates"])==2*k
+        assert [c["token_position"] for c in recorded[-1]["candidates"] if c["request_id"]=="A"]==list(range(4,4+k))
     # A later scheduler batch reverses request order and contains host placeholders.
     runner.input_batch.req_ids=["B","A"]
     b,a=values[1].tolist(),values[0].tolist()
@@ -155,6 +165,11 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k):
     adapter.trace_sample(lambda *args:NS(sampled_token_ids=torch.tensor(samples)))(runner,None,
         NS(num_draft_tokens=[k,k],draft_token_ids=torch.tensor(b+a)))
     session.close()
+    if summary_mode:
+        record=json.loads((session.root/"load.jsonl").read_text().splitlines()[0])
+        assert record["expert_choices"]==dict(target=4*(k+1),mtp=4*k,combined=8*k+4)
+        assert record["partial"] and record["sampling"]=="continuous"
+        return
     for dp in range(1,16):
         adapter.Session(runner,session.cfg,dict(dp=dp,tp=0,ep=dp)).close()
     report=script("scripts/validation/analyze_ascend_023_debug.py").analyze(session.root.parent.parent)
@@ -165,8 +180,16 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k):
     assert report["decisions"]["unverified"]==0
 
 
-def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, monkeypatch):
+@pytest.mark.parametrize("summary_mode",[False,True])
+def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, monkeypatch,summary_mode):
     runner, session = setup
+    if summary_mode:
+        from moe_trace.adapters.ascend_load_summary import SummarySession
+        session=SummarySession(runner,dict(session.cfg,mode="summary",run_id="graph-summary",
+            save_token_ids=False,save_expert_weights=False,interval_seconds=5,max_files=4),
+            dict(dp=0,tp=0,ep=0),start_thread=False)
+        monkeypatch.setattr(adapter,"_session",session)
+        monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("summary full-device barrier"))
     class Mode(Enum):
         NONE=0
         FULL=1
@@ -213,10 +236,20 @@ def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, mo
     wrapper=NS(runtime_mode=Mode.FULL,concrete_aclgraph_entries={},runnable=model,
         aclgraph_options=NS(debug_log_enable=False,gc_disable=False,weak_ref_output=False),
         graph_pool=None,is_debugging_mode=False,use_eagle=True,enable_enpu=False)
-    arm_graph_capture(1,lambda:None)
+    arm_graph_capture(1,None if summary_mode else lambda:None)
     original=call(wrapper) # Real reference __call__ startup capture; graph runtime is simulated.
-    assert not events(session)
+    assert not (session.root/"load.jsonl").read_text() if summary_mode else not events(session)
     route_ids[:]=torch.tensor([[5,6],[7,0]])
+    if summary_mode:
+        scheduler=NS(num_scheduled_tokens={"A":1,"B":1},total_num_scheduled_tokens=2,scheduled_spec_decode_tokens={})
+        with adapter.trace_target(runner,scheduler,None,torch.tensor([2,1]),Mode.FULL):
+            assert call(wrapper) is original
+        session.flush()
+        record=json.loads((session.root/"load.jsonl").read_text().splitlines()[0])
+        counts=next(row for row in record["layers"] if row["kind"]=="target_decode")
+        assert counts["expert_selection_counts"]==[1,0,0,0,0,1,1,1]
+        assert calls==["capture"]
+        return
     with execution_routes(1) as snapshots:
         assert call(wrapper) is original
     assert calls==["capture"]
