@@ -67,7 +67,16 @@ python scripts/validation/ascend_023_source_cpu.py \
 没有提供源码路径时，全仓 pytest 中这些源码依赖用例会跳过；应使用本入口验证，
 不能把跳过当通过。
 
-本轮最终测试数量、全仓回归和可复现产物目录将在完成最后回归后记录于本文。
+本轮专项 **34 passed，无跳过**；提供全部历史固定源码后的全仓回归
+**384 passed，无跳过**。完整 patch 通过参考 Ascend 源码 `git apply --check`。
+指南中 10 段 Bash 通过 `bash -n`，示意 JSON 通过解析；全仓文档链接检查通过。
+源码副本和原命令包装器的实际 CLI 预检通过，未启动本地或远程模型服务。
+
+本机复验产物：
+`/home/czx/code/moe-routing/outputs/ascend-023-source-cpu/ascend-023-source-cpu-xq_hdt6p/`。
+其中 `cpu-validation.json` 和 `pytest.log` 记录实际执行情况；
+`pytest/test_actual_mtp_first_pass_and2/cpu` 是 K=3 的 16-worker CPU 场景。
+此绝对路径仅用于定位本次证据，不是用户安装路径。
 
 ## 真机仍需确认
 

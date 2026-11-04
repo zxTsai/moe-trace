@@ -12,6 +12,7 @@ def analyze(root, expected_workers=16, allow_incomplete=False):
         raise ValueError("no worker status.json found; pass output_root/run_id")
     counts, decisions = Counter(), Counter()
     proposals, resolved = set(), set()
+    initialized_layers = set()
     workers, executions, unresolved, limits, pending_verification = [], 0, 0, 0, 0
     identities = set()
     run_ids = set()
@@ -48,8 +49,10 @@ def analyze(root, expected_workers=16, allow_incomplete=False):
                     raise ValueError("route count mismatch")
                 for row in event["routes"]:
                     key = (event["scope"], row["kind"], row["layer_name"], row["num_experts"])
-                    for expert in range(row["num_experts"]):
-                        counts[(*key, expert)] += 0
+                    if key not in initialized_layers:
+                        for expert in range(row["num_experts"]):
+                            counts[(*key, expert)] += 0
+                        initialized_layers.add(key)
                     for expert in row["expert_ids"]:
                         counts[(*key, expert)] += 1
             elif event["type"] == "sampler":
