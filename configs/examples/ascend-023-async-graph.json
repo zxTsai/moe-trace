@@ -1,0 +1,9 @@
+{
+  "output_root": "/trace-output",
+  "run_id": "dsv4-debug-001",
+  "node_id": "decode",
+  "save_token_ids": false,
+  "save_expert_weights": false,
+  "max_executions": 200,
+  "max_file_bytes": 268435456
+}

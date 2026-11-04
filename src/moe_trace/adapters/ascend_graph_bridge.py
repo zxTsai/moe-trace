@@ -11,6 +11,16 @@ from .graph_routes import GraphRouteBank
 
 _execution = ContextVar("ascend_graph_route_execution", default=None)
 _bank = ContextVar("ascend_graph_route_bank", default=None)
+_armed_layers = None
+_before_snapshot = None
+
+
+def arm_graph_capture(max_layers, before_snapshot=None):
+    """Enable startup capture before the runner's first real request."""
+    global _armed_layers, _before_snapshot
+    if max_layers is not None and (type(max_layers) is not int or max_layers < 1):
+        raise ValueError("max_layers must be positive or None")
+    _armed_layers, _before_snapshot = max_layers, before_snapshot
 
 
 @contextmanager
@@ -31,6 +41,12 @@ def record_graph_routes(layer, expert_ids, weights=None):
     if bank is not None:
         bank.record(layer, expert_ids, weights)
         return True
+    execution = _execution.get()
+    if execution is not None:
+        from .graph_routes import RouteSnapshot
+        execution[1].append(RouteSnapshot(layer, expert_ids.clone(),
+                                        None if weights is None else weights.clone()))
+        return True
     return False
 
 
@@ -44,7 +60,7 @@ def trace_acl_graph(function):
     @wraps(function)
     def traced(wrapper, *args, **kwargs):
         execution = _execution.get()
-        if execution is None:
+        if execution is None and _armed_layers is None:
             return function(wrapper, *args, **kwargs)
         # Import only during an explicitly enabled forward.
         from vllm.forward_context import get_forward_context
@@ -59,7 +75,7 @@ def trace_acl_graph(function):
         if banks is None:
             banks = wrapper._moe_trace_route_banks = {}
         if capturing:
-            bank = GraphRouteBank(execution[0])
+            bank = GraphRouteBank(execution[0] if execution is not None else _armed_layers)
             token = _bank.set(bank)
             try:
                 output = function(wrapper, *args, **kwargs)
@@ -72,6 +88,9 @@ def trace_acl_graph(function):
             if bank is None:
                 raise RuntimeError("graph was captured without route hooks; restart with capture enabled")
             output = function(wrapper, *args, **kwargs)
-        execution[1].extend(bank.snapshot())
+        if execution is not None:
+            if _before_snapshot is not None:
+                _before_snapshot()
+            execution[1].extend(bank.snapshot())
         return output
     return traced

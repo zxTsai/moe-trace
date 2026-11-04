@@ -4,13 +4,14 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from moe_trace.adapters.ascend_graph_bridge import (
-    execution_routes, record_graph_routes, trace_acl_graph,
+    arm_graph_capture, execution_routes, record_graph_routes, trace_acl_graph,
 )
 from test_graph_routes import Tensor
 
 
 @pytest.fixture
 def graph(monkeypatch):
+    arm_graph_capture(None)
     context = SimpleNamespace(cudagraph_runtime_mode="FULL", batch_descriptor=2)
     package = ModuleType("vllm")
     module = ModuleType("vllm.forward_context")
@@ -40,7 +41,8 @@ def graph(monkeypatch):
                     operation()
             return self.output
 
-    return Wrapper(), context
+    yield Wrapper(), context
+    arm_graph_capture(None)
 
 
 def test_capture_replay_returns_original_output_and_fresh_execution_snapshots(graph):
@@ -79,3 +81,17 @@ def test_nested_execution_rejected(graph):
         with pytest.raises(RuntimeError, match="nested"):
             with execution_routes(1):
                 pass
+
+
+def test_startup_warmup_retains_bank_without_writing_execution(graph):
+    wrapper, _ = graph
+    barriers = []
+    arm_graph_capture(1, lambda: barriers.append("wait_all_streams"))
+    wrapper()  # Startup capture: no execution/file emission.
+    assert not barriers
+    wrapper.ids.values[:] = [[7, 8]]
+    with execution_routes(1) as snapshots:
+        wrapper()
+    assert barriers == ["wait_all_streams"]
+    assert snapshots[0].expert_ids.values.tolist() == [[7, 8]]
+    assert wrapper.hook_calls == 1

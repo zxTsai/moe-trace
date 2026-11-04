@@ -2,7 +2,26 @@
 
 日期：2026-11-04。分支：`feature/ascend-deepseek-v4-mtp-async-graph`。
 基于已提交的同步 eager MTP 版本 `0dc03e8`；原 MTP 分支保持不变。
-状态：源码调查和设计阶段，**本分支尚未实现当前原配置的完整采集接入**。
+状态（2026-11-05）：已接入参考源码的 worker 初始化/退出、主模型执行、图预热/重放、
+W8A8 逻辑路由、采样和 eager MTP 预测路径；提供独立源码副本与原脚本启动入口。
+当前为 **A3 真机调试候选版，尚未在真实 NPU/模型服务验收**。
+
+首个调试版在图外使用 device-wide synchronize 后做阻塞 D2H，不创建后台拷贝流，
+由此覆盖路由生产多流与图重放的完成依赖。保留原有异步/图/共享专家多流参数，
+但新增等待会改变实际执行重叠和性能，不能把采集吞吐作为原服务吞吐。
+每个图 entry 持有路由 clone，重放输出另做 execution 私有快照；启动预热只保留
+设备槽位，不写真实请求事件。eager fallback 使用同一快照与映射入口。
+
+本版输出独立 `events.jsonl` 和带 SHA256 的 `status.json`，不套用旧同步 MTP profile。
+按实际设备输入和请求分段区分 target_decode、target_verify、mtp_draft。
+保存 sampler 的接受前缀决策，拒绝/后续未采用的计算路由仍保留；候选生产关联按实际
+token 与位置校验，不能匹配时明确标为 `unresolved`，绝不伪造 round ID。
+这类记录可用于观察路由和排查关联，不能作为候选归因完整性验收通过的证据。
+K=1/2/3 的真实参考 MTP Python 循环已在 CPU stub 条件下覆盖，当前 A3 入口主要面向用户 K=1。
+
+每 worker 达到执行次数或字节上限后停止新增采集、继续原 forward，状态为
+`limit_reached`，表示部分窗口；分析这类结果需显式 `--allow-incomplete`。
+启动拒绝复用已存在的 run/node 输出目录，原 vendor 安装文件完全不改动。
 
 ## 用户要求和不变的启动配置
 
