@@ -13,15 +13,17 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
+import sys
+import time
 
-from .ascend_graph_bridge import arm_graph_capture, execution_routes, record_graph_routes
+from .ascend_graph_bridge import arm_graph_capture, execution_routes, record_graph_routes, route_recording_active
 from ..io import atomic_json
 
 PROFILE = "deepseek-v4-023post1-async-graph-debug"
 ENV = "MOE_TRACE_ASCEND_023_CONFIG"
 _session = None
 _proposal = ContextVar("ascend023_proposal", default=None)
-_layer_info = {}
 
 
 def config():
@@ -111,6 +113,7 @@ class Session:
         self.sequence = self.executions = self.bytes = 0
         self.capped = self.failed = self.closed = False
         self.current_target = None
+        self.scheduler_step = 0
         self.pending = {}
         self.digest = hashlib.sha256()
         self.root = Path(cfg["output_root"]) / cfg["run_id"] / cfg["node_id"] / f"dp-{ranks['dp']}-tp-{ranks['tp']}"
@@ -127,6 +130,9 @@ class Session:
             "sha256": self.digest.hexdigest(), "npu_verified": False,
             "validation_level": "debug_unverified_a3", "error": error,
             "scope": "logical_routed_experts_only", "performance_representative": False,
+            "hostname": socket.gethostname(), "pid": os.getpid(), "python": sys.executable,
+            "visible_devices": os.environ.get("ASCEND_RT_VISIBLE_DEVICES"),
+            "pending_verification": bool(self.current_target and any(self.current_target["drafts"].values())),
         })
 
     def emit(self, event):
@@ -155,7 +161,8 @@ class Session:
             self.stream.close()
             self.closed = True
             if not self.failed:
-                self.status("limit_reached" if self.capped else "closed")
+                pending = self.current_target and any(self.current_target["drafts"].values())
+                self.status("limit_reached" if self.capped else "incomplete" if pending else "closed")
 
     def next_execution(self):
         if self.executions >= self.cfg["max_executions"]:
@@ -180,6 +187,8 @@ def initialize(runner):
     if (dp.world_size, tp.world_size, ep.world_size) != (16, 1, 16):
         raise ValueError("actual process groups differ from DP16/TP1/EP16")
     ranks = dict(dp=dp.rank_in_group, tp=tp.rank_in_group, ep=ep.rank_in_group)
+    import torch
+    ranks["device"] = int(torch.npu.current_device())
     _session = Session(runner, cfg, ranks)
     arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8, synchronize)
     atexit.register(close)
@@ -191,20 +200,16 @@ def close():
         _session.close()
         _session = None
     arm_graph_capture(None)
-    _layer_info.clear()
 
 
 def capture_routes(layer, ids, weights, prepare, num_experts, forbidden=False):
-    if _session is None:
+    if _session is None or not route_recording_active():
         return
-    if forbidden:
-        raise ValueError("forced expert rebalance cannot be attributed")
+    if forbidden or getattr(layer, "zero_expert_num", 0):
+        raise ValueError("forced expert rebalance and zero experts are outside this debug profile")
     name = layer.layer_name
     info = dict(prepare=type(prepare).__name__, num_experts=int(num_experts))
-    previous = _layer_info.setdefault(name, info)
-    if previous != info:
-        raise ValueError("layer route layout changed after capture")
-    record_graph_routes(name, ids, weights if _session.cfg["save_expert_weights"] else None)
+    record_graph_routes(name, ids, weights if _session.cfg["save_expert_weights"] else None, info)
 
 
 def request_snapshot(runner):
@@ -246,7 +251,9 @@ def route_records(session, snapshots, rows, input_size, dp_sizes, padded):
         if snapshot.layer in seen:
             raise ValueError("duplicate routing layer in one execution")
         seen.add(snapshot.layer)
-        info = _layer_info[snapshot.layer]
+        info = snapshot.metadata
+        if info is None:
+            raise ValueError("routing snapshot lacks its captured prepare layout")
         local_size = dp_sizes[session.ranks["dp"]] if info["prepare"].endswith("AllGather") and dp_sizes else input_size
         mapping = selector_rows(info["prepare"], input_size=local_size,
             valid_indices=[r["input_row"] for r in rows], tp_size=1, tp_rank=0,
@@ -257,6 +264,8 @@ def route_records(session, snapshots, rows, input_size, dp_sizes, padded):
         selected = host(snapshot.expert_ids[indices])
         weights = host(snapshot.weights[indices].float()) if snapshot.weights is not None else None
         match = re.search(r"(?:^|\.)(layers|mtp)\.(\d+)(?:\.|$)", snapshot.layer)
+        if match is None:
+            raise ValueError("cannot identify original model layer from routing name")
         for n, (i, _) in enumerate(mapping):
             experts = selected[n]
             if (not experts or len(set(experts)) != len(experts)
@@ -265,7 +274,7 @@ def route_records(session, snapshots, rows, input_size, dp_sizes, padded):
             row = dict(lookup[i])
             if not session.cfg["save_token_ids"]:
                 row.pop("token_id", None)
-            row.update(layer_name=snapshot.layer, layer_id=int(match[2]) if match else None,
+            row.update(layer_name=snapshot.layer, layer_id=int(match[2]),
                        num_experts=info["num_experts"], expert_ids=experts)
             if weights is not None:
                 row["expert_weights"] = weights[n]
@@ -300,12 +309,13 @@ def forward(session, scope, ids, positions, row_builder, metadata):
             raise ValueError(f"incomplete {scope} routing coverage: expected {expected}, got {len(snapshots)}")
         routes = route_records(session, snapshots, rows, len(actual), sizes,
                                getattr(_EXTRA_CTX, "padded_num_tokens", None))
-        event = dict(type="execution", execution_id=execution, scope=scope,
+        event = dict(type="execution", schema_version=1, execution_id=execution, scope=scope,
+                     scheduler_step=session.scheduler_step, host_time_ns=time.time_ns(),
                      input_rows=len(actual), valid_decode_rows=len(rows),
                      route_records=len(routes), routes=routes, **metadata)
-        session.emit(event)
         if any(sum(r["input_row"] == row["input_row"] for r in routes) != expected for row in rows):
             raise ValueError("layer coverage differs between actual input rows")
+        session.emit(event)
         session.last_forward = dict(execution_id=execution, rows=rows, ids=actual, positions=pos)
     except BaseException as exc:
         session.fail(exc)
@@ -318,6 +328,7 @@ def trace_target(runner, scheduler, ids, positions, mode):
     if session is None or session.capped:
         yield
         return
+    session.scheduler_step += 1
     requests, prompts = request_snapshot(runner)
     counts = dict(scheduler.num_scheduled_tokens)
     drafts = {req: list(values) for req, values in scheduler.scheduled_spec_decode_tokens.items()}
@@ -330,6 +341,7 @@ def trace_target(runner, scheduler, ids, positions, mode):
         yield
     if not session.capped:
         session.current_target = dict(session.last_forward, requests=requests, counts=counts, drafts=drafts)
+        session.status("recording")
 
 
 def trace_sample(function):
@@ -353,6 +365,8 @@ def trace_sample(function):
             for index, req in enumerate(target["requests"]):
                 k = lengths[index]
                 valid = [v for v in samples[index] if v >= 0]
+                if samples[index][:len(valid)] != valid or any(v != -1 for v in samples[index][len(valid):]):
+                    raise ValueError("sampler padding must follow the valid token prefix")
                 candidates = draft_ids[offset:offset+k]
                 offset += k
                 if k and (not 1 <= len(valid) <= k+1 or valid[:-1] != candidates[:len(valid)-1]):
@@ -367,6 +381,7 @@ def trace_sample(function):
                     linked = previous is not None and node < len(previous["tokens"]) and previous["tokens"][node] == row["token_id"] and previous["positions"][node] == row["token_position"]
                     decisions.append(dict(request_id=req, input_row=row["input_row"],
                         candidate_index=node, accepted=node < len(valid)-1,
+                        status="accepted" if node < len(valid)-1 else "rejected" if node == len(valid)-1 else "not_adopted",
                         candidate_round=previous["round"] if linked else None,
                         producer_link="matched" if linked else "unresolved"))
             if offset != len(draft_ids):
@@ -374,6 +389,7 @@ def trace_sample(function):
             session.emit(dict(type="sampler", execution_id=target["execution_id"],
                               decisions=decisions, valid_sample_counts=[sum(v >= 0 for v in row) for row in samples]))
             session.current_target = None
+            session.status("limit_reached" if session.capped else "recording")
         except BaseException as exc:
             session.fail(exc)
             raise
@@ -416,6 +432,12 @@ def trace_proposal(function):
                     if len(rows) != 1:
                         raise ValueError("ambiguous MTP producer")
                     row = rows[0]
+                    if step:
+                        first = next(r for r in state["forwards"][0]["rows"]
+                                     if r["request_id"] == req and r.get("producer"))
+                        if (row["token_position"] != first["token_position"]+step
+                                or row["token_id"] != values[index][step-1]):
+                            raise ValueError("MTP later-step input differs from its actual predecessor or position was clamped")
                     position = row["token_position"] + 2
                     positions.append(position)
                     item = dict(request_id=req, candidate_index=step, token_position=position,
@@ -424,6 +446,8 @@ def trace_proposal(function):
                         item["token_id"] = values[index][step]
                     candidates.append(item)
                 if positions:
+                    if len(positions) != k:
+                        raise ValueError("MTP candidate lacks one of its producer steps")
                     session.pending[req] = dict(round=round_id, positions=positions, tokens=list(values[index]))
             # The framework retires finished requests; do not retain their candidates indefinitely.
             session.pending = {r: v for r,v in session.pending.items() if r in proposer.runner.requests}
@@ -449,7 +473,9 @@ def trace_mtp_forward(proposer, model_kwargs, num_tokens, batch_size, sample_ind
     starts = host(proposer.query_start_loc_group[0][:len(requests)+1]) if step == 0 else list(range(len(requests)+1))
     selected = host(sample_indices[:len(requests)]) if step == 0 else list(range(len(requests)))
     discarded = set(proposer.runner.discard_request_indices.np[:proposer.runner.num_discarded_requests].tolist())
-    if batch_size < len(requests) or len(starts) != len(requests)+1 or starts[-1] > num_tokens:
+    if (batch_size < len(requests) or len(starts) != len(requests)+1 or starts[-1] > num_tokens
+            or starts[0] != 0 or len(selected) != len(requests)
+            or any(a >= b for a,b in zip(starts, starts[1:]))):
         raise ValueError("MTP request layout exceeds actual input")
     def build(values, positions):
         rows = []

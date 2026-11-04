@@ -2,6 +2,10 @@
 
 ## 当前结论
 
+本分支的 v0.23.0.post1-a3 异步/图/共享专家多流/eager MTP 接入见
+[CPU 验证与真机待验收清单](DeepSeekV4异步图执行采集CPU验证.md)。
+已提供现有 D 容器的隔离副本和原命令包装入口，可以进行 A3 调试，真实 NPU/服务未验收。
+
 DeepSeek V4 动态 K 候选 MTP 的 CPU 源码方法接入与接受/拒绝负载关联见
 [MTP 采集 CPU 验证](DeepSeekV4的MTP采集CPU验证.md)；真实 A3/PD 服务待验收。
 

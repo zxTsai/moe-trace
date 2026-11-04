@@ -24,7 +24,7 @@ EDITS = {
          f"        from {HOOK} import capture_routes\n"
          "        capture_routes(layer, topk_ids, topk_weights,\n"
          "                       _EXTRA_CTX.moe_comm_method.prepare_finalize, num_logical_experts,\n"
-         "                       enable_force_load_balance or get_ascend_config().enable_force_eplb)\n"),
+         "                       enable_force_load_balance or self.dynamic_eplb)\n"),
     ],
     "worker/worker.py": [
         ("            self.model_runner.load_model()\n", "            self.model_runner.load_model()\n"
@@ -116,6 +116,9 @@ def stage(vllm_package, ascend_package, parent, check_only=False):
         (output / "overlay.json").write_text(json.dumps({
             "profile": reference["profile"], "packages": {k: str(v) for k,v in roots.items()},
             "sha256": hashes, "debug_entry_ready": True, "npu_verified": False,
+            "plugin_sha256": {name: hashlib.sha256((ROOT/"src"/name).read_bytes()).hexdigest()
+                for name in ("moe_trace/adapters/ascend_023_debug.py", "moe_trace/adapters/ascend_graph_bridge.py",
+                             "moe_trace/adapters/graph_routes.py", "moe_trace/io.py")},
         }, ensure_ascii=False, indent=2)+"\n")
     except BaseException:
         shutil.rmtree(output)

@@ -42,8 +42,9 @@ def inspect_sources(vllm_package=None, ascend_package=None, workspace=Path("/vll
             "python": sys.executable, "versions": versions,
             "packages": {k: str(v) for k, v in roots.items()}, "discovery": discovery,
             "reference_source_match": not differences, "sha256": actual, "differences": differences,
-            "adapter_ready": False, "npu_verified": False,
-            "note": "Read-only source inventory. A match does not mean async/graph capture is implemented."}
+            "adapter_ready": False, "debug_entry_ready": reference.get("debug_entry_ready", False),
+            "npu_verified": False,
+            "note": "Read-only source inventory. Debug overlay is available; source match is not A3 acceptance."}
 
 
 def main():

@@ -188,8 +188,57 @@ def test_disabled_hooks_preserve_original_return(monkeypatch):
         pass
 
 
+def test_profile_forced_balancing_is_ignored_outside_real_forward_or_graph_capture(setup):
+    _,session=setup
+    adapter.capture_routes(None,None,None,None,0,forbidden=True)
+    assert events(session)==[]
+
+
 def test_checked_stage_transforms_reject_unknown_sources(tmp_path):
     tool = script("scripts/tools/stage_ascend_async_graph.py")
     with pytest.raises(ValueError, match="source mismatch"):
         tool.stage(tmp_path/"vllm", tmp_path/"ascend", tmp_path/"overlay")
     assert not (tmp_path/"overlay").exists()
+
+
+def test_byte_limit_is_explicit_partial_result(setup):
+    runner, session = setup
+    session.cfg["max_file_bytes"] = 1
+    execute_target(runner, session)
+    assert events(session) == [] and session.capped
+    tool=script("scripts/validation/analyze_ascend_023_debug.py")
+    with pytest.raises(ValueError, match="limit_reached"):
+        tool.analyze(session.root.parent.parent,expected_workers=1)
+    report=tool.analyze(session.root.parent.parent,expected_workers=1,allow_incomplete=True)
+    assert report["limits_reached"]==1 and not report["capture_observed"]
+
+
+def test_sampler_mismatched_actual_candidate_fails_instead_of_guessing(setup):
+    runner,session=setup
+    execute_target(runner,session,True)
+    fn=adapter.trace_sample(lambda *args:NS(sampled_token_ids=torch.tensor([[99,-1],[23,-1]])))
+    with pytest.raises(ValueError,match="actual input"):
+        fn(runner,None,NS(num_draft_tokens=[1,0],draft_token_ids=torch.tensor([98])))
+    assert json.loads((session.root/"status.json").read_text())["state"]=="failed"
+
+
+def test_summary_refuses_missing_workers_by_default(setup):
+    runner,session=setup
+    execute_target(runner,session)
+    session.close()
+    tool=script("scripts/validation/analyze_ascend_023_debug.py")
+    with pytest.raises(ValueError,match="expected 16 workers"):
+        tool.analyze(session.root.parent.parent)
+
+
+def test_shutdown_with_missing_verification_is_explicitly_incomplete(setup):
+    runner,session=setup
+    execute_target(runner,session,True)
+    session.close()
+    assert json.loads((session.root/"status.json").read_text())["state"]=="incomplete"
+    tool=script("scripts/validation/analyze_ascend_023_debug.py")
+    with pytest.raises(ValueError,match="incomplete"):
+        tool.analyze(session.root.parent.parent,expected_workers=1)
+    report=tool.analyze(session.root.parent.parent,expected_workers=1,allow_incomplete=True)
+    assert report["pending_verification_executions"]==1
+    assert not report["candidate_attribution_complete"]

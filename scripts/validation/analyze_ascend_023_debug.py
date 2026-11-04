@@ -11,11 +11,20 @@ def analyze(root, expected_workers=16, allow_incomplete=False):
     if not statuses:
         raise ValueError("no worker status.json found; pass output_root/run_id")
     counts, decisions = Counter(), Counter()
-    workers, executions, unresolved, limits = [], 0, 0, 0
+    proposals, resolved = set(), set()
+    workers, executions, unresolved, limits, pending_verification = [], 0, 0, 0, 0
     identities = set()
+    run_ids = set()
     for path in statuses:
         status = json.loads(path.read_text())
+        if status["profile"] != "deepseek-v4-023post1-async-graph-debug":
+            raise ValueError("wrong worker profile")
+        run_ids.add(status["run_id"])
+        if len(run_ids) != 1:
+            raise ValueError("mixed run IDs")
         identity = (status["ranks"]["dp"], status["ranks"]["tp"])
+        if identity[1] != 0 or not 0 <= identity[0] < 16:
+            raise ValueError("worker rank outside DP16/TP1")
         if identity in identities:
             raise ValueError("duplicate DP/TP worker identity")
         identities.add(identity)
@@ -47,18 +56,30 @@ def analyze(root, expected_workers=16, allow_incomplete=False):
                 if event["execution_id"] not in local_executions:
                     raise ValueError("sampler refers to missing target execution")
                 for decision in event["decisions"]:
-                    decisions["accepted" if decision["accepted"] else "rejected_or_not_adopted"] += 1
+                    decisions[decision["status"]] += 1
                     unresolved += decision["producer_link"] != "matched"
+                    if decision["producer_link"] == "matched":
+                        resolved.add((identity, decision["candidate_round"], decision["request_id"], decision["candidate_index"]))
+            elif event["type"] == "proposal":
+                for candidate in event["candidates"]:
+                    proposals.add((identity, event["candidate_round"], candidate["request_id"], candidate["candidate_index"]))
         limits += status["state"] == "limit_reached"
+        pending_verification += bool(status.get("pending_verification"))
         workers.append({"path": str(path.parent), "ranks": status["ranks"], "state": status["state"]})
     if not allow_incomplete and len(workers) != expected_workers:
         raise ValueError(f"expected {expected_workers} workers, found {len(workers)}")
     target = sum(n for key,n in counts.items() if key[0] == "target")
     mtp = sum(n for key,n in counts.items() if key[0] == "mtp")
+    decisions["unverified"] = len(proposals-resolved)
+    for state in ("accepted", "rejected", "not_adopted"):
+        decisions[state] += 0
     return {"profile": "deepseek-v4-023post1-async-graph-debug", "npu_verified": False,
             "workers": workers, "executions": executions, "limits_reached": limits,
             "worker_coverage_complete": len(workers) == expected_workers,
             "unresolved_candidate_links": unresolved, "decisions": dict(decisions),
+            "capture_observed": executions > 0 and target+mtp > 0,
+            "pending_verification_executions": pending_verification,
+            "candidate_attribution_complete": unresolved == 0 and pending_verification == 0,
             "expert_choices": {"target": target, "mtp": mtp, "combined": target+mtp},
             "counts": [dict(scope=k[0], kind=k[1], layer_name=k[2], num_experts=k[3], expert_id=k[4], count=n)
                        for k,n in sorted(counts.items())],

@@ -61,7 +61,8 @@ Ascend `1cdb8c4db6e50f36f1fb3283b3e3dd618f6821e8`；
 版本化参考清单保存在 `patches/ascend/deepseek-v4-023post1-async-graph/reference-files.json`。
 只读检查入口为 `scripts/tools/inspect_ascend_async_graph.py`，以实际 import spec 定位为先、
 默认源码目录为后备。不导入 NPU 框架、不执行 Git、不改变服务；
-`reference_source_match=true` 仅是源文件匹配，`adapter_ready=false` 明确表示采集实现未完成。
+`reference_source_match=true` 仅是源文件匹配。`adapter_ready=false` 保留真实 A3 未验收状态，
+新增 `debug_entry_ready=true` 表示具备可安装的真机调试入口，不表示生产兼容保证。
 该检查器已通过 4 项 CPU 测试，在本地 release 参考源码上 18 个文件摘要全部匹配；
 没有读取 A3 容器的实际文件，不能把本地结果当作服务器文件匹配或采集通过。
 
@@ -102,7 +103,7 @@ eager fallback 与 replay 共用输出契约，但分别记录执行路径。
 
 ### 多流依赖
 
-记录 routed tensor 的生产 stream/event，使拷贝 stream 在数据真正就绪后读取；
+后续优化可记录 routed tensor 的生产 stream/event，使拷贝 stream 在数据真正就绪后读取；
 共享专家原有 milestones、wait 和返回值保持。跨 stream 引用的 tensor 生命周期持续到
 拷贝完成。不得以仅在主 stream 记录一个 event 代替对实际生产 stream 的确认。
 
@@ -117,7 +118,7 @@ eager fallback 与 replay 共用输出契约，但分别记录执行路径。
 
 默认源码目录按用户确认使用 `/vllm-workspace/vllm`、`/vllm-workspace/vllm-ascend`。
 这是 A3 容器内路径，本开发机没有该目录，不能据此推断实际版本。
-必须读取运行 D 服务的解释器和源码提交，确定实际 graph wrapper、runner、sampler 和 stream
+必须读取运行 D 服务的解释器和源码摘要，确定实际 graph wrapper、runner、sampler 和 stream
 实现后，再生成可加载补丁；路径相同不代表源码相同。
 
 1. 获取真实 D 端版本/提交，扩展 graph/async/multistream 关键源码摘要清单。
@@ -129,5 +130,5 @@ eager fallback 与 replay 共用输出契约，但分别记录执行路径。
 6. 真实 A3 验证 capture/replay 实际更新、不同 bucket、空闲 rank、并发与结果对照。
    CPU 无法证明 NPU graph 允许新增 copy/event，也无法证明设备多流同步正确。
 
-本设计不等于上述实现已完成。现有同步 eager MTP 版本不能直接用于原始异步/图/多流配置，
-也不能通过删除 ConfigError 或只安装插件来获得这些支持。
+目前 1～4 已有调试实现，第 5 步已覆盖本报告所列 CPU 场景，真实乱序设备执行和第 6 步
+待 A3 验收。旧同步 eager adapter 保留原保护条件，使用新的独立 profile 才能进入本调试路径。

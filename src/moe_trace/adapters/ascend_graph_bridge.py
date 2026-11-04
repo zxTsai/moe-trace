@@ -15,6 +15,10 @@ _armed_layers = None
 _before_snapshot = None
 
 
+def route_recording_active():
+    return _bank.get() is not None or _execution.get() is not None
+
+
 def arm_graph_capture(max_layers, before_snapshot=None):
     """Enable startup capture before the runner's first real request."""
     global _armed_layers, _before_snapshot
@@ -36,16 +40,16 @@ def execution_routes(max_layers):
         _execution.reset(token)
 
 
-def record_graph_routes(layer, expert_ids, weights=None):
+def record_graph_routes(layer, expert_ids, weights=None, metadata=None):
     bank = _bank.get()
     if bank is not None:
-        bank.record(layer, expert_ids, weights)
+        bank.record(layer, expert_ids, weights, metadata)
         return True
     execution = _execution.get()
     if execution is not None:
         from .graph_routes import RouteSnapshot
         execution[1].append(RouteSnapshot(layer, expert_ids.clone(),
-                                        None if weights is None else weights.clone()))
+                                        None if weights is None else weights.clone(), metadata))
         return True
     return False
 

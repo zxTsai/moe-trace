@@ -15,6 +15,11 @@ def prepare_environment(overlay, configuration):
     manifest = json.loads((overlay / "overlay.json").read_text())
     if manifest["profile"] != "deepseek-v4-023post1-async-graph" or not manifest.get("debug_entry_ready"):
         raise ValueError("wrong overlay profile")
+    if not manifest.get("plugin_sha256"):
+        raise ValueError("overlay has no plugin fingerprints; create a fresh overlay")
+    for name, expected in manifest["plugin_sha256"].items():
+        if hashlib.sha256((ROOT/"src"/name).read_bytes()).hexdigest() != expected:
+            raise ValueError(f"plugin changed after staging; create a fresh overlay: {name}")
     for name, expected in manifest["sha256"].items():
         package, relative = name.split("/", 1)
         path = overlay / name if package == "vllm_ascend" else Path(manifest["packages"][package]) / relative

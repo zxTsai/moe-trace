@@ -3,7 +3,9 @@ import ast
 from contextlib import ExitStack, contextmanager
 from enum import Enum
 import os
+import json
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType, SimpleNamespace as NS
 
@@ -35,7 +37,12 @@ def overlay(tmp_path):
     if not vllm or not ascend:
         pytest.skip("use scripts/validation/ascend_023_source_cpu.py with reference source paths")
     stage = script("scripts/tools/stage_ascend_async_graph.py")
-    return Path(stage.stage(Path(vllm)/"vllm", Path(ascend)/"vllm_ascend", tmp_path/"overlays"))
+    output=Path(stage.stage(Path(vllm)/"vllm", Path(ascend)/"vllm_ascend", tmp_path/"overlays"))
+    reference=Path(__file__).resolve().parents[1]/"patches/ascend/deepseek-v4-023post1-async-graph/0001-debug-hooks.patch"
+    assert (output/"debug-hooks.patch").read_bytes()==reference.read_bytes()
+    # A successful stage still leaves the original sources matching the lock.
+    assert stage.stage(Path(vllm)/"vllm",Path(ascend)/"vllm_ascend",None,True)["source_check"]=="passed"
+    return output
 
 
 def test_actual_runner_forward_w8a8_and_sampler(setup, overlay):
@@ -53,7 +60,7 @@ def test_actual_runner_forward_w8a8_and_sampler(setup, overlay):
     apply = method(overlay/"vllm_ascend/quantization/methods/w8a8_dynamic.py",
         "AscendW8A8DynamicFusedMoEMethod", "apply", dict(torch=torch,
         get_moe_num_logical_experts=lambda layer,n,**kw:n, select_experts=selector,
-        _EXTRA_CTX=extra, get_ascend_config=lambda:NS(enable_force_eplb=False, enable_fused_mc2=0),
+        _EXTRA_CTX=extra, get_ascend_config=lambda:NS(enable_fused_mc2=0),
         MoECommType=NS(FUSED_MC2="FUSED_MC2"), build_fused_experts_input=lambda **kw:NS(**kw)))
     layer = NS(layer_name="model.layers.0.mlp.experts", w13_weight=None, w2_weight=None,
                w13_weight_scale_fp32=None, w2_weight_scale=None, swiglu_limit=None)
@@ -133,6 +140,29 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k):
     assert len([e for e in recorded if e["type"]=="execution"])==k
     assert recorded[-1]["type"]=="proposal" and len(recorded[-1]["candidates"])==2*k
     assert [c["token_position"] for c in recorded[-1]["candidates"] if c["request_id"]=="A"]==list(range(4,4+k))
+    # A later scheduler batch reverses request order and contains host placeholders.
+    runner.input_batch.req_ids=["B","A"]
+    b,a=values[1].tolist(),values[0].tolist()
+    scheduler=NS(num_scheduled_tokens={"A":k+1,"B":k+1},total_num_scheduled_tokens=2*(k+1),
+        scheduled_spec_decode_tokens={"A":[-1]*k,"B":[-1]*k})
+    ids=torch.tensor([23,*b,13,*a])
+    positions=torch.tensor([*range(2,3+k),*range(3,4+k)])
+    with adapter.trace_target(runner,scheduler,ids,positions,NS(name="NONE")):
+        capture("model.layers.0.mlp.experts",torch.tensor([[1,2]]).repeat(len(ids),1))
+    accepted=k//2
+    samples=[b[:accepted]+[61],a[:accepted]+[62]]
+    samples=[r+[-1]*(k+1-len(r)) for r in samples]
+    adapter.trace_sample(lambda *args:NS(sampled_token_ids=torch.tensor(samples)))(runner,None,
+        NS(num_draft_tokens=[k,k],draft_token_ids=torch.tensor(b+a)))
+    session.close()
+    for dp in range(1,16):
+        adapter.Session(runner,session.cfg,dict(dp=dp,tp=0,ep=dp)).close()
+    report=script("scripts/validation/analyze_ascend_023_debug.py").analyze(session.root.parent.parent)
+    assert report["expert_choices"]==dict(target=4*(k+1),mtp=4*k,combined=8*k+4)
+    assert report["worker_coverage_complete"] and report["unresolved_candidate_links"]==0
+    assert report["decisions"].get("accepted",0)==2*accepted
+    assert report["decisions"]["rejected"]==2
+    assert report["decisions"]["unverified"]==0
 
 
 def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, monkeypatch):
@@ -191,3 +221,23 @@ def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, mo
         assert call(wrapper) is original
     assert calls==["capture"]
     assert snapshots[0].expert_ids.tolist()==[[5,6],[7,0]]
+
+
+def test_launcher_preserves_original_command_and_checks_overlay(setup,overlay,tmp_path):
+    _,session=setup
+    config=tmp_path/"launch.json"
+    config.write_text(json.dumps(dict(session.cfg,run_id="launch-check")))
+    launcher=Path(__file__).resolve().parents[1]/"scripts/deployment/ascend_023_debug.py"
+    command=[sys.executable,str(launcher),"--overlay",str(overlay),"--config",str(config)]
+    result=subprocess.run([*command,"--check"],capture_output=True,text=True)
+    assert result.returncode==0,result.stderr
+    assert json.loads(result.stdout)["launch_check"]=="passed"
+    code="import json,sys,os;print(json.dumps({'args':sys.argv[1:],'config':os.environ['MOE_TRACE_ASCEND_023_CONFIG']}))"
+    result=subprocess.run([*command,"--",sys.executable,"-c",code,"literal ; $value"],capture_output=True,text=True)
+    assert result.returncode==0,result.stderr
+    output=json.loads(result.stdout.splitlines()[-1])
+    assert output["args"]==["literal ; $value"] and output["config"]==str(config)
+    with (overlay/"vllm_ascend/worker/worker.py").open("a") as stream:
+        stream.write("\n# modified after staging\n")
+    result=subprocess.run([*command,"--check"],capture_output=True,text=True)
+    assert result.returncode==2 and "integrity mismatch" in result.stderr

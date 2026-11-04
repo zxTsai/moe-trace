@@ -2,6 +2,7 @@
   "profile": "deepseek-v4-023post1-async-graph",
   "image_tag": "quay.io/ascend/vllm-ascend:v0.23.0.post1-a3",
   "adapter_ready": false,
+  "debug_entry_ready": true,
   "reference_commits": {
     "vllm": "0fc695fc6d1d82e9a5ac6835ac8e4e1c83703665",
     "vllm_ascend": "1cdb8c4db6e50f36f1fb3283b3e3dd618f6821e8"

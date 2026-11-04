@@ -2,8 +2,12 @@
 
 > 当前 `feature/ascend-deepseek-v4-mtp-async-graph` 分支正在适配用户镜像
 > `quay.io/ascend/vllm-ascend:v0.23.0.post1-a3` 的异步、图执行和共享专家多流配置。
-> **目前完成版本调查、设计和只读环境检查，采集接入尚未完成，不能直接启用原配置采集。**
-> 见[适配设计](docs/design/DeepSeekV4保留异步图执行多流的采集设计.md)。
+> **现已提供保留原 D 启动配置的采集调试入口，CPU 接入验证通过，真实 A3 待验收。**
+> 从[现有 A3 容器安装和调试](docs/guides/DeepSeekV4现有A3容器采集调试指南.md)开始：
+> 下载代码、安装插件、检查源码、创建副本、包装原脚本启动、查看 JSON 和专家计数。
+> 不构建新镜像、不升级框架；采集增加同步等待，会降低吞吐。
+> [适配设计](docs/design/DeepSeekV4保留异步图执行多流的采集设计.md) ·
+> [CPU 验证与真机待验收项](docs/validation/DeepSeekV4异步图执行采集CPU验证.md)。
 > 下文同步 eager MTP 功能属于已有实现，不代表本次原配置适配已经完成。
 
 面向 vLLM 的 MoE 专家路由采集工具，将实际模型执行、内部请求、输入 token
@@ -13,6 +17,12 @@
 路由结果，不重新计算 softmax/Top-K，不依赖 `--enable-return-routed-experts`。
 
 ## 支持与状态
+
+| 本分支场景 | 启动配置 | 当前状态 |
+| --- | --- | --- |
+| v0.23.0.post1-a3，DeepSeek V4，D DP16/TP1/EP16 | 原 async、FULL_DECODE_ONLY、npugraph_ex、共享专家多流、eager MTP K=1 | 可安装真机调试；CPU 源码接入通过，A3 未验收 |
+| 新调试输出 | execution/sampler/proposal JSONL、SHA256、JSON 专家计数 | 保留拒绝计算；无法关联的候选明确 unresolved |
+| 旧同步 eager MTP profile | 下文原指南 | 独立 adapter/patch，不与新 profile 混装 |
 
 **DeepSeek V4 + MTP 调测入口：** [从零部署快速开始](docs/guides/DeepSeekV4开启MTP采集指南.md)
 （宿主机、镜像、模型、PD 服务、插件安装、采集与分析）· [更新说明](docs/更新说明.md)。

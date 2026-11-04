@@ -6,6 +6,8 @@
 
 ## 使用指南
 
+- [DeepSeek V4 现有 A3 容器采集调试](guides/DeepSeekV4现有A3容器采集调试指南.md)：保留原异步/图/多流/MTP 配置，只在 D 安装插件与副本；CPU 通过，真机待验收。
+
 - [DeepSeek V4 + MTP 从零部署](guides/DeepSeekV4开启MTP采集指南.md)：宿主机、镜像构建/复用、权重、P/D/proxy、插件、动态 K 路由和结果分析；A3 待验收。
 
 - [DeepSeek V4 两机 A3 快速开始](guides/DeepSeekV4两机A3快速开始.md)：P4×4、D16×1，同步 eager、无 MTP，安装、采集与负载导出；A3 待验收。
@@ -22,7 +24,7 @@
 
 ## 需求与设计
 
-- [保留异步、图执行和多流的适配设计](design/DeepSeekV4保留异步图执行多流的采集设计.md)：目标镜像 v0.23.0.post1-a3，开发阶段，未完成采集接入。
+- [保留异步、图执行和多流的适配设计](design/DeepSeekV4保留异步图执行多流的采集设计.md)：目标镜像 v0.23.0.post1-a3，真机调试入口及 CPU 接入已实现。
 
 - [DeepSeek V4 的 MTP 采集设计](design/DeepSeekV4的MTP采集设计.md)：候选产物、实际预测输入、sampler 决策及 scope 完整性。
 

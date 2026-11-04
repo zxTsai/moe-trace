@@ -12,6 +12,7 @@ class RouteSnapshot:
     layer: str
     expert_ids: object
     weights: object | None
+    metadata: object | None = None
 
 
 class GraphRouteBank:
@@ -22,7 +23,7 @@ class GraphRouteBank:
         self._slots = {}
         self._sealed = False
 
-    def record(self, layer, expert_ids, weights=None):
+    def record(self, layer, expert_ids, weights=None, metadata=None):
         """Called once per layer during capture, never during replay.
 
         ``clone`` allocates an owned slot and records its device copy in the
@@ -41,7 +42,7 @@ class GraphRouteBank:
         if weights is not None and weights.shape != expert_ids.shape:
             raise ValueError("route weights and IDs must have equal shapes")
         self._slots[layer] = RouteSnapshot(
-            layer, expert_ids.clone(), None if weights is None else weights.clone())
+            layer, expert_ids.clone(), None if weights is None else weights.clone(), metadata)
 
     def seal(self):
         if not self._slots:
@@ -58,5 +59,5 @@ class GraphRouteBank:
         if not self._sealed:
             raise RuntimeError("graph route bank must be sealed before snapshot")
         return tuple(RouteSnapshot(s.layer, s.expert_ids.clone(),
-                                   None if s.weights is None else s.weights.clone())
+                                   None if s.weights is None else s.weights.clone(), s.metadata)
                      for s in self._slots.values())
