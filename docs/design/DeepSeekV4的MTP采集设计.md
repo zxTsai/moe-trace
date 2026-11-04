@@ -3,6 +3,23 @@
 日期：2026-11-04。分支：`feature/ascend-deepseek-v4-mtp`。
 基于非 MTP 分支 `9a527d5`，保留原 adapter、patch、指南和测试。
 
+## 动态 K 扩展（本轮）
+
+用户要求取消 K=1 限制。按配置读取最大 K，每次真实 `_propose` 读取本轮 K（0 到配置上限），
+采集首次上下文 forward 和后续逐候选 forward，不按配置假造执行次数。
+同一个物理 MTP 层可以重复执行 K 次；每次独立 execution，候选 node 为 0..K-1，
+共享一个 proposal round。每请求、每步核对输入 token、kernel position、producer 输出。
+target 可能只调度该轮候选的前缀，按实际调度长度匹配，未验证后缀保持 unverified。
+
+sampler 以实际有效输出长度减 1 得到接受前缀长度；核对整个接受前缀。
+第一个未接受节点标 rejected，后续标 not_adopted，已计算的后缀路由全部保留。
+共享 CandidateResult 的 accepted=false 表示未接受，导出另提供细分 decision，
+不会把后缀说成独立验证拒绝。源模型长度钳制导致的越界预测必须明确拒绝采集，不能
+把被重置到 position 0 的 dummy 行绑定到真实请求。图、异步、多物理 MTP 层等边界保留。
+
+CPU 增加 K=2/3、接受 0/部分/全部、K=0、裁短验证、同 ID 不同节点、
+后续输入关联错误和漏采 step 拒绝；K=1 原测试继续回归。
+
 ## 首阶段支持范围
 
 两机 A3 P4/TP4、D16/TP1、Ascend W8A8、MooncakeHybridConnector；D V1、同步 eager，
