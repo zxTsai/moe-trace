@@ -50,7 +50,18 @@ python scripts/validation/ascend_023_source_cpu.py \
 ```
 
 此入口包含 summary、trace、图桥接和参考源码接入测试，保存 pytest 日志、
-cpu-validation.json、源码副本和各场景 JSONL。最终数量及产物定位在最后回归后补充。
+cpu-validation.json、源码副本和各场景 JSONL。
+
+本轮专项 **58 passed**，提供所有固定历史源码后的全仓回归 **408 passed，无跳过**。
+快速开始的 6 段 Bash 通过 `bash -n`、2 段 JSON 通过解析；安装/分析入口标准库
+`--help` 及仓库文档链接检查通过。NPU API 的事件/传输 stream 行为仍为模拟检查，
+上述数量不表示真实 A3/服务或性能测试通过。
+
+本机复验产物（仅用于证据定位，不是用户安装路径）：
+`/home/czx/code/moe-routing/outputs/ascend-023-summary-cpu/ascend-023-source-cpu-zsjk_ewb/`。
+K=3 summary 的 CLI 分析结果保存在 `load-analysis-k3.json`，包含 16 个 CPU worker
+的保留窗口（1 个活跃、15 个空闲），target=16、mtp=12、combined=28。
+这些 worker 为模拟进程身份，没有启动 16 个 NPU 模型进程。
 
 ## 性能验收
 

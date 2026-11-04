@@ -169,6 +169,10 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summar
         record=json.loads((session.root/"load.jsonl").read_text().splitlines()[0])
         assert record["expert_choices"]==dict(target=4*(k+1),mtp=4*k,combined=8*k+4)
         assert record["partial"] and record["sampling"]=="continuous"
+        for dp in range(1,16):
+            SummarySession(runner,session.cfg,dict(dp=dp,tp=0,ep=dp),start_thread=False).close()
+        report=script("scripts/validation/analyze_ascend_load.py").analyze(session.root.parent.parent)
+        assert report["worker_coverage_complete"] and report["expert_choices"]==record["expert_choices"]
         return
     for dp in range(1,16):
         adapter.Session(runner,session.cfg,dict(dp=dp,tp=0,ep=dp)).close()
