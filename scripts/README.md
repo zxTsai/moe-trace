@@ -4,6 +4,10 @@
 
 | 入口 | 职责 |
 | --- | --- |
+| `tools/inspect_ascend_v4_mtp.py` | V4 + MTP 源码/模型只读检查 |
+| `tools/stage_ascend_v4_mtp.py` | 独立 MTP 采集副本，追加 proposer/sampler 接入 |
+| `deployment/ascend_v4_mtp_1p1d.py` | P4×4 / D16×1 单候选 MTP 同步 eager 调试启动 |
+| `validation/deepseek_v4_mtp_cpu.py` | MTP 生产、验证和 sampler 关联 CPU 复验及 JSON/CSV 证据 |
 | `tools/inspect_ascend_v4.py` | V4 服务包位置、版本、模型和源码摘要只读检查 |
 | `tools/stage_ascend_v4_debug.py` | V4 D16×1 隔离采集副本，保留原安装包 |
 | `deployment/ascend_v4_1p1d_debug.py` | P4×4 / D16×1 调试启动；默认 dry-run，显式执行 |

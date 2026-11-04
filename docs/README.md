@@ -4,6 +4,8 @@
 
 ## 使用指南
 
+- [DeepSeek V4 开启 MTP 采集](guides/DeepSeekV4开启MTP采集指南.md)：单候选 MTP、主模型验证、接受/拒绝关联和分模型负载；A3 待验收。
+
 - [DeepSeek V4 两机 A3 快速开始](guides/DeepSeekV4两机A3快速开始.md)：P4×4、D16×1，同步 eager、无 MTP，安装、采集与负载导出；A3 待验收。
 
 - [Qwen3.6 单机 A3 快速开始](guides/Qwen3.6/README.md)：获取代码、环境检查、隔离采集接入、JSON/CSV 汇总与 CPU 验证；A3 待验收。
@@ -17,6 +19,8 @@
 - [配置说明](../configs/README.md)与[脚本说明](../scripts/README.md)。
 
 ## 需求与设计
+
+- [DeepSeek V4 的 MTP 采集设计](design/DeepSeekV4的MTP采集设计.md)：候选产物、实际预测输入、sampler 决策及 scope 完整性。
 
 - [DeepSeek V4 两机采集适配设计](design/DeepSeekV4两机采集适配设计.md)：独立 patch、hash 路由、16 worker 和输入覆盖校验。
 

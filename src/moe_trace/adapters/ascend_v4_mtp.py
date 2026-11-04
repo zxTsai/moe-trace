@@ -1,4 +1,4 @@
-"""DeepSeek V4 D-side DP16/TP1 eager W8A8 capture; A3 acceptance pending."""
+"""DeepSeek V4 D-side single-token MTP capture; A3 acceptance pending."""
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import re
 
-from .ascend_v41_debug import build_inputs
 from ..distributed.debug_layout import selector_rows
 from ..distributed.decode import Worker, Route, DecodeRow, CandidateResult
 from ..distributed.storage import create_run, WorkerWriter
