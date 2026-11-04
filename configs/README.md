@@ -7,6 +7,7 @@
 | `examples/vllm-0.29.0.yaml` | 0.29.0 用户示例 |
 | `examples/ascend-vllm-0.23.0.yaml` | Ascend 实验配置，默认关闭，CPU 验证不等于 A3 验收 |
 | `examples/ascend-023-async-graph.json` | V4 现有 A3 容器调试：D16/TP1、异步/图/eager MTP；显式包装启动时启用，绝对输出路径和采集上限 |
+| `examples/ascend-023-load-summary.json` | 同一环境的连续负载汇总：默认每 5 秒回传，16 MiB/文件、保留 4 文件/worker |
 | `validation/` | 历史实验配置，可能包含维护者机器路径，不用于通用快速开始 |
 
 用户示例输出到 `./outputs`，相对于服务启动目录。可复制到仓库根 `trace.yaml`

@@ -12,10 +12,14 @@ def analyze(root,expected_workers=16,allow_incomplete=False):
     counts=Counter()
     workers=[]
     ranks=set()
+    run_ids=set()
     windows=0
     total={"target":0,"mtp":0}
     for path in paths:
         status=json.loads(path.read_text())
+        run_ids.add(status["run_id"])
+        if len(run_ids)!=1:
+            raise ValueError("mixed run IDs")
         if status["profile"]!="deepseek-v4-023post1-load-summary":
             raise ValueError("not a periodic load summary run")
         if status["state"]=="failed" or (status["state"]!="closed" and not allow_incomplete):

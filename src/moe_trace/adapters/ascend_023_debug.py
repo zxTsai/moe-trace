@@ -211,7 +211,8 @@ def initialize(runner):
     if cfg.get("mode") == "summary":
         from .ascend_load_summary import SummarySession
         _session = SummarySession(runner,cfg,ranks)
-        arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8)
+        arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8,
+                          call_guard=lambda session=_session:session.lock)
     else:
         _session = Session(runner, cfg, ranks)
         arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8, synchronize)
@@ -356,8 +357,12 @@ def trace_target(runner, scheduler, ids, positions, mode):
         return
     if getattr(session,"mode",None) == "summary":
         from .ascend_load_summary import capture_forward, target_masks
-        with capture_forward(session,"target",target_masks(runner,scheduler,positions)):
-            yield
+        try:
+            with capture_forward(session,"target",target_masks(runner,scheduler,positions)):
+                yield
+        except BaseException as exc:
+            session.fail(exc)
+            raise
         return
     session.scheduler_step += 1
     requests, prompts = request_snapshot(runner)
@@ -446,6 +451,9 @@ def trace_proposal(function):
             try:
                 session.check()
                 return function(proposer,*args,**kwargs)
+            except BaseException as exc:
+                session.fail(exc)
+                raise
             finally:
                 _proposal.reset(token)
         requests, prompts = request_snapshot(proposer.runner)

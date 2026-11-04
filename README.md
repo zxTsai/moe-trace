@@ -10,6 +10,11 @@
 > [CPU 验证与真机待验收项](docs/validation/DeepSeekV4异步图执行采集CPU验证.md)。
 > 下文同步 eager MTP 功能属于已有实现，不代表本次原配置适配已经完成。
 
+**长时间观察专家负载：** [周期负载汇总快速开始](docs/guides/DeepSeekV4周期负载汇总快速开始.md)。
+第一版已提供 `summary` 模式：连续在设备侧累计，默认每 5 秒输出一条 `load.jsonl`，
+按主模型普通 Decode/验证和 MTP 分层统计，文件按大小轮转。无需新镜像，复用原 D 脚本。
+`trace` 完整轨迹模式保留；两种模式启动时选择。CPU 已验证，真实 A3 与性能收益待验收。
+
 面向 vLLM 的 MoE 专家路由采集工具，将实际模型执行、内部请求、输入 token
 位置、模型层和 Top-K 专家关联起来，支持按执行轮次分析并发请求。
 
@@ -22,6 +27,7 @@
 | --- | --- | --- |
 | v0.23.0.post1-a3，DeepSeek V4，D DP16/TP1/EP16 | 原 async、FULL_DECODE_ONLY、npugraph_ex、共享专家多流、eager MTP K=1 | 可安装真机调试；CPU 源码接入通过，A3 未验收 |
 | 新调试输出 | execution/sampler/proposal JSONL、SHA256、JSON 专家计数 | 保留拒绝计算；无法关联的候选明确 unresolved |
+| 周期负载 summary | 连续设备计数、默认 5 秒窗口、JSONL 轮转、JSON 汇总 | 无逐请求轨迹/接受率；CPU 接入通过，A3 性能待测 |
 | 旧同步 eager MTP profile | 下文原指南 | 独立 adapter/patch，不与新 profile 混装 |
 
 **DeepSeek V4 + MTP 调测入口：** [从零部署快速开始](docs/guides/DeepSeekV4开启MTP采集指南.md)

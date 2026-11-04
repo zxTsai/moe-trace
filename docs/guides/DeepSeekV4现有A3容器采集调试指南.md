@@ -1,5 +1,9 @@
 # DeepSeek V4：在现有 A3 Decode 容器中安装和调试采集
 
+本指南对应 `trace` 完整轨迹调试模式。需要长期观察专家分布时，使用
+[周期负载汇总快速开始](DeepSeekV4周期负载汇总快速开始.md)：相同安装与副本入口，
+选择 summary 配置，每 5 秒输出计数、文件轮转，不保存逐请求明细。
+
 适用于你已经按官方指导跑通的两机 1P1D 服务。镜像为
 `quay.io/ascend/vllm-ascend:v0.23.0.post1-a3`，vLLM `0.23.0+empty`，
 vLLM Ascend `0.23.0.post1`，D 为 DP16/TP1/EP16。

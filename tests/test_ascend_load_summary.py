@@ -191,3 +191,30 @@ def test_npu_transfer_waits_for_producer_event_on_correct_device(summary,monkeyp
     monkeypatch.setattr(torch,"npu",NS(set_device=lambda device:calls.append(("device",device.index))),raising=False)
     session.flush()
     assert calls==[("device",3),"event_complete"]
+
+
+def test_summary_initialize_arms_guard_without_debug_barrier(setup,monkeypatch,tmp_path):
+    import sys
+    from types import ModuleType
+    from moe_trace.adapters import ascend_graph_bridge as bridge
+    runner,_=setup
+    adapter.close()
+    config=dict(mode="summary",output_root=str(tmp_path),run_id="initialized",node_id="D",
+                interval_seconds=5,max_files=4,max_file_bytes=16384)
+    path=tmp_path/"initialize.json"
+    path.write_text(json.dumps(config))
+    monkeypatch.setenv(adapter.ENV,str(path))
+    group=ModuleType("vllm.distributed")
+    group.get_dp_group=lambda:NS(world_size=16,rank_in_group=0)
+    group.get_tp_group=lambda:NS(world_size=1,rank_in_group=0)
+    group.get_ep_group=lambda:NS(world_size=16,rank_in_group=0)
+    monkeypatch.setitem(sys.modules,"vllm.distributed",group)
+    monkeypatch.setattr(torch,"npu",NS(current_device=lambda:0),raising=False)
+    adapter.initialize(runner)
+    session=adapter._session
+    assert isinstance(session,SummarySession) and session.thread.is_alive()
+    assert bridge._before_snapshot is None and bridge._call_guard() is session.lock
+    target(runner)
+    adapter.close()
+    assert session.closed and not session.thread.is_alive()
+    assert records(session)[-1]["partial"]

@@ -256,10 +256,15 @@ def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, mo
     assert snapshots[0].expert_ids.tolist()==[[5,6],[7,0]]
 
 
-def test_launcher_preserves_original_command_and_checks_overlay(setup,overlay,tmp_path):
+@pytest.mark.parametrize("mode",["trace","summary"])
+def test_launcher_preserves_original_command_and_checks_overlay(setup,overlay,tmp_path,mode):
     _,session=setup
     config=tmp_path/"launch.json"
-    config.write_text(json.dumps(dict(session.cfg,run_id="launch-check")))
+    cfg=dict(session.cfg,run_id="launch-check")
+    if mode=="summary":
+        cfg={k:cfg[k] for k in ("output_root","run_id","node_id","max_file_bytes")}
+        cfg.update(mode="summary",interval_seconds=5,max_files=4)
+    config.write_text(json.dumps(cfg))
     launcher=Path(__file__).resolve().parents[1]/"scripts/deployment/ascend_023_debug.py"
     command=[sys.executable,str(launcher),"--overlay",str(overlay),"--config",str(config)]
     result=subprocess.run([*command,"--check"],capture_output=True,text=True)

@@ -6,6 +6,8 @@
 
 ## 使用指南
 
+- [DeepSeek V4 周期负载汇总快速开始](guides/DeepSeekV4周期负载汇总快速开始.md)：现有官方 D 容器安装，连续计数、默认 5 秒输出 JSONL 与文件轮转，CPU 验证通过，A3 待验收。
+
 - [DeepSeek V4 现有 A3 容器采集调试](guides/DeepSeekV4现有A3容器采集调试指南.md)：保留原异步/图/多流/MTP 配置，只在 D 安装插件与副本；CPU 通过，真机待验收。
 
 - [DeepSeek V4 + MTP 从零部署](guides/DeepSeekV4开启MTP采集指南.md)：宿主机、镜像构建/复用、权重、P/D/proxy、插件、动态 K 路由和结果分析；A3 待验收。
@@ -23,6 +25,8 @@
 - [配置说明](../configs/README.md)与[脚本说明](../scripts/README.md)。
 
 ## 需求与设计
+
+- [周期负载汇总第一版设计](design/DeepSeekV4周期负载汇总设计.md)：设备计数、定时线程、事件依赖、滚动保留与 trace 边界。
 
 - [保留异步、图执行和多流的适配设计](design/DeepSeekV4保留异步图执行多流的采集设计.md)：目标镜像 v0.23.0.post1-a3，真机调试入口及 CPU 接入已实现。
 

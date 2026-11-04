@@ -13,18 +13,20 @@ _execution = ContextVar("ascend_graph_route_execution", default=None)
 _bank = ContextVar("ascend_graph_route_bank", default=None)
 _armed_layers = None
 _before_snapshot = None
+_call_guard = None
 
 
 def route_recording_active():
     return _bank.get() is not None or _execution.get() is not None
 
 
-def arm_graph_capture(max_layers, before_snapshot=None):
+def arm_graph_capture(max_layers, before_snapshot=None, call_guard=None):
     """Enable startup capture before the runner's first real request."""
-    global _armed_layers, _before_snapshot
+    global _armed_layers, _before_snapshot, _call_guard
     if max_layers is not None and (type(max_layers) is not int or max_layers < 1):
         raise ValueError("max_layers must be positive or None")
     _armed_layers, _before_snapshot = max_layers, before_snapshot
+    _call_guard = call_guard
 
 
 @contextmanager
@@ -97,4 +99,13 @@ def trace_acl_graph(function):
                 _before_snapshot()
             execution[1].extend(bank.snapshot())
         return output
-    return traced
+    @wraps(function)
+    def guarded(wrapper,*args,**kwargs):
+        guard=_call_guard
+        if guard is None:
+            return traced(wrapper,*args,**kwargs)
+        # A background summary transfer must never overlap global graph capture,
+        # including dummy/warmup calls outside a real execution context.
+        with guard():
+            return traced(wrapper,*args,**kwargs)
+    return guarded

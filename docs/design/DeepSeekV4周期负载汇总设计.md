@@ -21,9 +21,13 @@ target_decode、target_verify、mtp_draft 分别计数，包含拒绝候选产�
 每个窗口只保留规模为层数×专家数×阶段数的设备累计值，图仍有路由快照 copy 成本。
 
 计数更新使用锁与 NPU event 管理：更新前等待先前计数事件（允许调用 stream 改变），
-更新后记录事件。后台定时线程设置同一 device，持锁等待该事件完成后，仅将计数向量
-拷贝到 CPU，清空本窗口累计，再写 JSONL。主线程不逐 forward 调用 device synchronize。
+更新后记录事件。后台定时线程设置同一 device，持锁等待该事件完成后，在专用传输 stream
+打包计数向量并一次拷贝到 CPU，清空本窗口累计，再写 JSONL。
+专用 stream 避免把拷贝排到工作 stream 新一轮推理/通信之后。
+主线程不逐 forward 调用 device synchronize。
 拷贝期间下一次统计更新可能短暂等待锁，定时汇总不是零开销或性能保证。
+同一锁还覆盖 graph wrapper 的调用（包括 dummy/warmup），避免后台设备拷贝与
+全局图捕获并发；不在 torch.npu.graph 捕获区域里执行 host 拷贝。
 NPU 调用和图/多流安全必须真机验收；CPU 仅验证软件契约与参考 Python 接入。
 
 定时器使用 monotonic 时钟，每 interval 触发一次；记录实际起止时间和窗口时长，

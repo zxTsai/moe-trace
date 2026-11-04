@@ -28,6 +28,7 @@ def main():
     result = subprocess.run(command, cwd=ROOT, env=environment, capture_output=True, text=True)
     (output/"pytest.log").write_text(result.stdout+result.stderr)
     report = dict(validation_level="cpu_reference_source_with_hardware_stubs",
+        modes=["trace","summary"],
         passed=result.returncode == 0, npu_verified=False, full_service_verified=False,
         real_model_loaded=False, vllm_source=str(args.vllm_source.resolve()),
         ascend_source=str(args.ascend_source.resolve()),

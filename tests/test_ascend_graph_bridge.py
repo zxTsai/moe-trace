@@ -95,3 +95,21 @@ def test_startup_warmup_retains_bank_without_writing_execution(graph):
     assert barriers == ["wait_all_streams"]
     assert snapshots[0].expert_ids.values.tolist() == [[7, 8]]
     assert wrapper.hook_calls == 1
+
+
+def test_graph_guard_covers_warmup_and_replay(graph):
+    from contextlib import contextmanager
+    wrapper,_=graph
+    calls=[]
+    @contextmanager
+    def guard():
+        calls.append("lock")
+        try:
+            yield
+        finally:
+            calls.append("unlock")
+    arm_graph_capture(1,call_guard=guard)
+    wrapper()
+    with execution_routes(1):
+        wrapper()
+    assert calls==["lock","unlock","lock","unlock"]

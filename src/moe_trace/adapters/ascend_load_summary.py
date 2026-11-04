@@ -1,5 +1,5 @@
 """Continuous device-side logical expert counts with bounded periodic output."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import json
 import logging
 import os
@@ -29,7 +29,9 @@ class SummarySession:
         self.executions = {"target": 0, "mtp": 0}
         self.total_executions = {"target": 0, "mtp": 0}
         self.event, self.device, self.error = None, None, None
+        self.transfer_stream = None
         self.window, self.rotations, self.bytes = 0, 0, 0
+        self.file_ranges = [[]]
         self.started = self.clock()
         self.wall_started = time.time_ns()
         self.closed = False
@@ -46,6 +48,8 @@ class SummarySession:
             run_id=self.cfg["run_id"], node_id=self.cfg["node_id"], ranks=self.ranks,
             windows_written=self.window, rotations=self.rotations, retained_files=min(self.rotations+1,self.cfg["max_files"]),
             retention="rolling_windows", full_history_retained=self.rotations < self.cfg["max_files"],
+            first_retained_window=min((r[0] for r in self.file_ranges if r),default=None),
+            last_retained_window=max((r[-1] for r in self.file_ranges if r),default=None),
             interval_seconds=self.cfg["interval_seconds"], total_executions=self.total_executions,
             error=str(self.error) if self.error else None, npu_verified=False))
 
@@ -91,6 +95,8 @@ class SummarySession:
                 ids, info = snapshot.expert_ids, snapshot.metadata
                 if self.device is None:
                     self.device = ids.device
+                    if self.device.type != "cpu":
+                        self.transfer_stream = torch.npu.Stream(device=self.device)
                 elif self.device != ids.device:
                     raise ValueError("summary tensors changed device")
                 if self.device.type != "cpu" and self.event is not None:
@@ -148,10 +154,15 @@ class SummarySession:
             self.stream = (root/"load.jsonl").open("wb")
             self.bytes = 0
             self.rotations += 1
+            self.file_ranges = ([[]]+self.file_ranges)[:self.cfg["max_files"]]
         self.stream.write(data)
         self.stream.flush()
         os.fsync(self.stream.fileno())
         self.bytes += len(data)
+        if not self.file_ranges[0]:
+            self.file_ranges[0] = [record["window_id"],record["window_id"]]
+        else:
+            self.file_ranges[0][-1] = record["window_id"]
 
     def flush(self, *, partial=False):
         with self.lock:
@@ -166,7 +177,9 @@ class SummarySession:
             # One compact device-to-host transfer per active window.
             import torch
             packed=[self.counts[key] for key in keys]+[self.tokens[key].reshape(1) for key in keys]+[v.reshape(1) for v in errors]
-            values=torch.cat(packed).detach().cpu().tolist() if packed else []
+            transfer=torch.npu.stream(self.transfer_stream) if self.transfer_stream is not None else nullcontext()
+            with transfer:
+                values=torch.cat(packed).detach().cpu().tolist() if packed else []
             count_size=sum(key[4] for key in keys)
             token_values=values[count_size:count_size+len(keys)]
             if any(values[count_size+len(keys):]):
@@ -264,12 +277,14 @@ def target_masks(runner,scheduler,positions):
     import torch
     reqs = list(runner.input_batch.req_ids)
     counts = dict(scheduler.num_scheduled_tokens)
-    if set(reqs) != set(counts) or sum(counts.values()) != scheduler.total_num_scheduled_tokens:
+    if (len(set(reqs))!=len(reqs) or set(reqs) != set(counts)
+            or set(scheduler.scheduled_spec_decode_tokens)-set(reqs)
+            or sum(counts.values()) != scheduler.total_num_scheduled_tokens):
         raise ValueError("summary target batch differs from scheduler")
     prompts, verify = [], []
     for req in reqs:
         n = counts[req]
-        if type(n) is not int or n < 1:
+        if type(n) is not int or n < 1 or len(scheduler.scheduled_spec_decode_tokens.get(req,[]))>=n:
             raise ValueError("invalid summary request count")
         prompts.extend([runner.requests[req].num_prompt_tokens]*n)
         verify.extend([bool(scheduler.scheduled_spec_decode_tokens.get(req))]*n)
@@ -280,7 +295,12 @@ def target_masks(runner,scheduler,positions):
     threshold = torch.tensor(prompts+[0]*pad,device=positions.device)
     verification = torch.tensor(verify+[False]*pad,device=positions.device,dtype=torch.bool)
     valid = (torch.arange(size,device=positions.device)<len(prompts)) & (positions>=threshold)
-    return {"target_decode":valid & ~verification,"target_verify":valid & verification}
+    masks={}
+    if not verify or not all(verify):
+        masks["target_decode"]=valid & ~verification
+    if any(verify):
+        masks["target_verify"]=valid & verification
+    return masks
 
 
 def mtp_masks(proposer,model_kwargs,num_tokens,batch_size,sample_indices,step):

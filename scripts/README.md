@@ -9,6 +9,7 @@
 | `deployment/ascend_023_debug.py` | 检查副本和输出路径，包装原 D 命令，保留 async/图/多流/MTP 参数 |
 | `validation/ascend_023_source_cpu.py` | 本版参考源码 CPU 接入复验，持久化测试日志与证据 |
 | `validation/analyze_ascend_023_debug.py` | 验证 worker 摘要、导出 target/MTP 专家次数及候选关联诊断 JSON |
+| `validation/analyze_ascend_load.py` | 汇总保留的周期负载窗口，校验计数，导出 JSON；不把轮转删除部分当作全历史 |
 | `tools/inspect_ascend_v4_mtp.py` | V4 + MTP 源码/模型只读检查 |
 | `tools/stage_ascend_v4_mtp.py` | 独立 MTP 采集副本，追加 proposer/sampler 接入 |
 | `deployment/ascend_v4_mtp_1p1d.py` | P4×4 / D16×1 动态 K MTP 同步 eager 调试启动，支持 --num-speculative-tokens |
