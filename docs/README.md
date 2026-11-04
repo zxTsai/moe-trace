@@ -2,9 +2,11 @@
 
 首次使用从[仓库 README](../README.md)开始。所有用户命令默认在仓库根目录运行。
 
+[当前分支更新说明](更新说明.md)记录功能变化、提交检查点、支持边界及 CPU/A3 验收状态。
+
 ## 使用指南
 
-- [DeepSeek V4 开启 MTP 采集](guides/DeepSeekV4开启MTP采集指南.md)：动态 K 候选 MTP、主模型验证、接受/拒绝关联和分模型负载；A3 待验收。
+- [DeepSeek V4 + MTP 从零部署](guides/DeepSeekV4开启MTP采集指南.md)：宿主机、镜像构建/复用、权重、P/D/proxy、插件、动态 K 路由和结果分析；A3 待验收。
 
 - [DeepSeek V4 两机 A3 快速开始](guides/DeepSeekV4两机A3快速开始.md)：P4×4、D16×1，同步 eager、无 MTP，安装、采集与负载导出；A3 待验收。
 
