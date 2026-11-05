@@ -16,6 +16,7 @@ PROFILE = "deepseek-v4-023post1-load-summary"
 
 class SummarySession:
     mode = "summary"
+    profile = PROFILE
     capped = False
 
     def __init__(self, runner, cfg, ranks, *, start_thread=True, clock=time.monotonic):
@@ -40,11 +41,14 @@ class SummarySession:
         self.thread = None
         self.status("recording")
         if start_thread:
-            self.thread = threading.Thread(target=self._loop, name="moe-load-summary", daemon=True)
-            self.thread.start()
+            self.start_timer()
+
+    def start_timer(self):
+        self.thread = threading.Thread(target=self._loop, name="moe-load-summary", daemon=True)
+        self.thread.start()
 
     def status(self, state):
-        atomic_json(self.root/"status.json", dict(profile=PROFILE, state=state,
+        atomic_json(self.root/"status.json", dict(profile=self.profile, mode=self.mode, state=state,
             run_id=self.cfg["run_id"], node_id=self.cfg["node_id"], ranks=self.ranks,
             windows_written=self.window, rotations=self.rotations, retained_files=min(self.rotations+1,self.cfg["max_files"]),
             retention="rolling_windows", full_history_retained=self.rotations < self.cfg["max_files"],
@@ -202,6 +206,7 @@ class SummarySession:
                 duration_seconds=now-self.started, nominal_interval_seconds=self.cfg["interval_seconds"],
                 partial=partial, sampling="continuous", executions=dict(self.executions),
                 expert_choices=totals, layers=layers)
+            record=self.format_record(record)
             self._write(record)
             self.window += 1
             # Drop completed window tensors; keep no historical device storage.
@@ -211,10 +216,17 @@ class SummarySession:
             self.event = None
             self.executions = {"target":0,"mtp":0}
             self.started, self.wall_started = now, record["end_time_ns"]
+            self.after_flush()
             self.status("recording")
             self.logger.info("moe-trace dp=%s window=%s target=%s mtp=%s choices=%s partial=%s",
                 self.ranks["dp"],record["window_id"],record["executions"]["target"],
                 record["executions"]["mtp"],totals["combined"],partial)
+
+    def format_record(self,record):
+        return record
+
+    def after_flush(self):
+        pass
 
     def close(self):
         self.stop.set()
@@ -273,7 +285,7 @@ def capture_forward(session, scope, masks):
         raise
 
 
-def target_masks(runner,scheduler,positions):
+def target_masks(runner,scheduler,positions,per_request=False):
     import torch
     reqs = list(runner.input_batch.req_ids)
     counts = dict(scheduler.num_scheduled_tokens)
@@ -295,6 +307,15 @@ def target_masks(runner,scheduler,positions):
     threshold = torch.tensor(prompts+[0]*pad,device=positions.device)
     verification = torch.tensor(verify+[False]*pad,device=positions.device,dtype=torch.bool)
     valid = (torch.arange(size,device=positions.device)<len(prompts)) & (positions>=threshold)
+    if per_request:
+        result={}
+        rows=torch.arange(size,device=positions.device)
+        offset=0
+        for req in reqs:
+            kind="target_verify" if scheduler.scheduled_spec_decode_tokens.get(req) else "target_decode"
+            result[(req,kind)]=valid & (rows>=offset)&(rows<offset+counts[req])
+            offset+=counts[req]
+        return result or {("","target_decode"):valid}
     masks={}
     if not verify or not all(verify):
         masks["target_decode"]=valid & ~verification
@@ -303,7 +324,7 @@ def target_masks(runner,scheduler,positions):
     return masks
 
 
-def mtp_masks(proposer,model_kwargs,num_tokens,batch_size,sample_indices,step):
+def mtp_masks(proposer,model_kwargs,num_tokens,batch_size,sample_indices,step,per_request=False):
     import torch
     runner = proposer.runner
     reqs = list(runner.input_batch.req_ids)
@@ -314,11 +335,17 @@ def mtp_masks(proposer,model_kwargs,num_tokens,batch_size,sample_indices,step):
     mask = torch.zeros_like(positions,dtype=torch.bool)
     starts = proposer.query_start_loc_group[0] if step == 0 else None
     discarded = set(runner.discard_request_indices.np[:runner.num_discarded_requests].tolist())
+    individual={}
     for index,req in enumerate(reqs):
         if index in discarded:
             continue
         start = starts[index] if step == 0 else index
         end = starts[index+1] if step == 0 else index+1
         last = sample_indices[index] if step == 0 else index
-        mask |= (rows>=start)&(rows<end)&(rows<=last)&(rows<num_tokens)&(positions+1>=runner.requests[req].num_prompt_tokens)
+        current=(rows>=start)&(rows<end)&(rows<=last)&(rows<num_tokens)&(positions+1>=runner.requests[req].num_prompt_tokens)
+        mask |= current
+        if per_request:
+            individual[(req,"mtp_draft")]=current
+    if per_request:
+        return individual or {("","mtp_draft"):mask}
     return {"mtp_draft":mask}

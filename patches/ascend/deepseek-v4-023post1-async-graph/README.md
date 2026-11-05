@@ -20,7 +20,7 @@ python scripts/validation/ascend_023_source_cpu.py --help
 验证范围见[CPU 验证报告](../../../docs/validation/DeepSeekV4异步图执行采集CPU验证.md)。
 包含实际参考源码方法与 CPU 张量、模拟图/算子，不证明真实 NPU 图、跨流同步或完整服务成功。
 
-`reference-files.json` 记录 release 参考的 18 个关键 Python 文件摘要；用户的镜像可能
+`reference-files.json` 记录 release 参考的 20 个关键 Python 文件摘要（含实际专家部署映射实现）；用户的镜像可能
 包含不同构建提交或发行修补，必须比较实际安装文件。检查不依赖 `.git`，不会升级环境。
 
 在包含本分支源码的 D 容器中使用服务解释器执行：

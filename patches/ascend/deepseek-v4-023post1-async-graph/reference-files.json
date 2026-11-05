@@ -26,6 +26,8 @@
     "vllm_ascend/models/deepseek_v4.py": "c5f9404e8cdfd6e1dd15e2561d356cdd2afe676c8c406b77c65fb70a6ebce7a5",
     "vllm_ascend/models/deepseek_v4_mtp.py": "3d43c93c7f645a72cc8ba475a7ceb2049f2d085b82aae697da8e412e70327958",
     "vllm_ascend/spec_decode/llm_base_proposer.py": "4a90532c5c3667d9eb4fec666bf03c65a2f1c92cd402f731b644ef8fa2ed82ab",
-    "vllm_ascend/sample/rejection_sampler.py": "2cceaf9e09bb1b9752cb9ac1d8a44ebdb5bdb92f0b3533811d91c9d2b2c36534"
+    "vllm_ascend/sample/rejection_sampler.py": "2cceaf9e09bb1b9752cb9ac1d8a44ebdb5bdb92f0b3533811d91c9d2b2c36534",
+    "vllm/model_executor/layers/fused_moe/expert_map_manager.py": "308c00f63fcb6f44518ec3a56d8f902c7bba75928c2e3aea30fbe1f3f473973b",
+    "vllm_ascend/eplb/core/eplb_utils.py": "cd9028f303f93c8f0803d3fbbb2fe4a6e3c7bb002ada1dae66e62325f1cf3a25"
   }
 }

@@ -5,7 +5,7 @@
 | 入口 | 职责 |
 | --- | --- |
 | `tools/inspect_ascend_async_graph.py` | v0.23.0.post1-a3 只读源码指纹核对，无需 Git；匹配不等于 A3 验收 |
-| `tools/stage_ascend_async_graph.py` | 校验 18 文件摘要后生成独立 Ascend 采集副本，不改原安装 |
+| `tools/stage_ascend_async_graph.py` | 校验 20 文件摘要（含专家映射实现）后生成独立 Ascend 采集副本，不改原安装 |
 | `deployment/ascend_023_debug.py` | 检查副本和输出路径，包装原 D 命令，保留 async/图/多流/MTP 参数 |
 | `validation/ascend_023_source_cpu.py` | 本版参考源码 CPU 接入复验，持久化测试日志与证据 |
 | `validation/analyze_ascend_023_debug.py` | 验证 worker 摘要、导出 target/MTP 专家次数及候选关联诊断 JSON |

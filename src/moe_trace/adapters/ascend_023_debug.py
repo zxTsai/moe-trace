@@ -31,8 +31,13 @@ def config():
     if not name:
         return None
     value = json.loads(Path(name).read_text())
-    if value.get("mode") == "summary":
+    if value.get("mode") in {"summary","request_flow"}:
         required = {"mode", "output_root", "run_id", "node_id", "interval_seconds", "max_file_bytes", "max_files"}
+        if value["mode"]=="request_flow":
+            required.add("max_requests_per_window")
+            cap=value.get("max_requests_per_window")
+            if type(cap) is not int or not 1<=cap<=4096:
+                raise ValueError("max_requests_per_window must be between 1 and 4096")
         if set(value) != required:
             raise ValueError("unexpected summary config keys")
         interval = value["interval_seconds"]
@@ -208,9 +213,12 @@ def initialize(runner):
     ranks = dict(dp=dp.rank_in_group, tp=tp.rank_in_group, ep=ep.rank_in_group)
     import torch
     ranks["device"] = int(torch.npu.current_device())
-    if cfg.get("mode") == "summary":
-        from .ascend_load_summary import SummarySession
-        _session = SummarySession(runner,cfg,ranks)
+    if cfg.get("mode") in {"summary","request_flow"}:
+        if cfg["mode"]=="request_flow":
+            from .ascend_request_flow import RequestFlowSession as Recorder
+        else:
+            from .ascend_load_summary import SummarySession as Recorder
+        _session = Recorder(runner,cfg,ranks)
         arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers + 8,
                           call_guard=lambda session=_session:session.lock)
     else:
@@ -355,10 +363,11 @@ def trace_target(runner, scheduler, ids, positions, mode):
     if session is None or session.capped:
         yield
         return
-    if getattr(session,"mode",None) == "summary":
+    if getattr(session,"mode",None) in {"summary","request_flow"}:
         from .ascend_load_summary import capture_forward, target_masks
         try:
-            with capture_forward(session,"target",target_masks(runner,scheduler,positions)):
+            with capture_forward(session,"target",target_masks(runner,scheduler,positions,
+                                 per_request=session.mode=="request_flow")):
                 yield
         except BaseException as exc:
             session.fail(exc)
@@ -387,7 +396,7 @@ def trace_sample(function):
         session = _session
         if session is None or session.capped:
             return result
-        if getattr(session,"mode",None) == "summary":
+        if getattr(session,"mode",None) in {"summary","request_flow"}:
             session.check()
             return result
         try:
@@ -446,7 +455,7 @@ def trace_proposal(function):
         bound = signature.bind(proposer, *args, **kwargs)
         if bound.arguments.get("scheduler_output") is None:
             return function(proposer, *args, **kwargs)  # dummy/profiling proposal
-        if getattr(session,"mode",None) == "summary":
+        if getattr(session,"mode",None) in {"summary","request_flow"}:
             token = _proposal.set(True)
             try:
                 session.check()
@@ -516,9 +525,10 @@ def trace_mtp_forward(proposer, model_kwargs, num_tokens, batch_size, sample_ind
     if session is None or session.capped or proposal is None:
         yield
         return
-    if getattr(session,"mode",None) == "summary":
+    if getattr(session,"mode",None) in {"summary","request_flow"}:
         from .ascend_load_summary import capture_forward, mtp_masks
-        with capture_forward(session,"mtp",mtp_masks(proposer,model_kwargs,num_tokens,batch_size,sample_indices,step)):
+        with capture_forward(session,"mtp",mtp_masks(proposer,model_kwargs,num_tokens,batch_size,sample_indices,step,
+                             per_request=session.mode=="request_flow")):
             yield
         return
     requests = proposal["requests"]

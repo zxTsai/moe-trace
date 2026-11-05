@@ -96,14 +96,22 @@ def test_actual_runner_forward_w8a8_and_sampler(setup, overlay):
 
 
 @pytest.mark.parametrize("k", [1,2,3])
-@pytest.mark.parametrize("summary_mode", [False,True])
+@pytest.mark.parametrize("summary_mode", [False,True,"request_flow"])
 def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summary_mode,monkeypatch):
     runner, session = setup
     if summary_mode:
         from moe_trace.adapters.ascend_load_summary import SummarySession
-        session=SummarySession(runner,dict(session.cfg,mode="summary",run_id="summary-source",
+        Recorder=SummarySession
+        options={}
+        if summary_mode=="request_flow":
+            from moe_trace.adapters.ascend_request_flow import RequestFlowSession
+            from test_ascend_request_flow import placements
+            Recorder=RequestFlowSession
+            options["placements"]=placements()
+        session=Recorder(runner,dict(session.cfg,mode="request_flow" if summary_mode=="request_flow" else "summary",
+            run_id="summary-source",max_requests_per_window=128,
             save_token_ids=False,save_expert_weights=False,interval_seconds=5,max_files=4),
-            dict(dp=0,tp=0,ep=0),start_thread=False)
+            dict(dp=0,tp=0,ep=0,device=0),start_thread=False,**options)
         monkeypatch.setattr(adapter,"_session",session)
         monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("summary must not synchronize per forward"))
         monkeypatch.setattr(adapter,"host",lambda *args:pytest.fail("summary must not read per-token host data"))
@@ -164,11 +172,20 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summar
     samples=[r+[-1]*(k+1-len(r)) for r in samples]
     adapter.trace_sample(lambda *args:NS(sampled_token_ids=torch.tensor(samples)))(runner,None,
         NS(num_draft_tokens=[k,k],draft_token_ids=torch.tensor(b+a)))
+    if summary_mode=="request_flow":
+        for dp in range(1,16):
+            Recorder(runner,session.cfg,dict(dp=dp,tp=0,ep=dp,device=dp),start_thread=False,**options).close()
     session.close()
     if summary_mode:
         record=json.loads((session.root/"load.jsonl").read_text().splitlines()[0])
         assert record["expert_choices"]==dict(target=4*(k+1),mtp=4*k,combined=8*k+4)
         assert record["partial"] and record["sampling"]=="continuous"
+        if summary_mode=="request_flow":
+            report=script("scripts/validation/analyze_ascend_request_flow.py").analyze(session.root.parent.parent)
+            assert len(report["requests"])==2 and report["worker_coverage_complete"]
+            assert report["expert_choices"]==record["expert_choices"]
+            assert not report["unresolved_destination_ranks"]
+            return
         for dp in range(1,16):
             SummarySession(runner,session.cfg,dict(dp=dp,tp=0,ep=dp),start_thread=False).close()
         report=script("scripts/validation/analyze_ascend_load.py").analyze(session.root.parent.parent)
@@ -260,14 +277,16 @@ def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, mo
     assert snapshots[0].expert_ids.tolist()==[[5,6],[7,0]]
 
 
-@pytest.mark.parametrize("mode",["trace","summary"])
+@pytest.mark.parametrize("mode",["trace","summary","request_flow"])
 def test_launcher_preserves_original_command_and_checks_overlay(setup,overlay,tmp_path,mode):
     _,session=setup
     config=tmp_path/"launch.json"
     cfg=dict(session.cfg,run_id="launch-check")
-    if mode=="summary":
+    if mode in {"summary","request_flow"}:
         cfg={k:cfg[k] for k in ("output_root","run_id","node_id","max_file_bytes")}
-        cfg.update(mode="summary",interval_seconds=5,max_files=4)
+        cfg.update(mode=mode,interval_seconds=5,max_files=4)
+        if mode=="request_flow":
+            cfg["max_requests_per_window"]=128
     config.write_text(json.dumps(cfg))
     launcher=Path(__file__).resolve().parents[1]/"scripts/deployment/ascend_023_debug.py"
     command=[sys.executable,str(launcher),"--overlay",str(overlay),"--config",str(config)]
@@ -283,3 +302,25 @@ def test_launcher_preserves_original_command_and_checks_overlay(setup,overlay,tm
         stream.write("\n# modified after staging\n")
     result=subprocess.run([*command,"--check"],capture_output=True,text=True)
     assert result.returncode==2 and "integrity mismatch" in result.stderr
+
+
+def test_actual_framework_placement_provider_matches_runtime_local_map(overlay):
+    from moe_trace.adapters.ascend_request_flow import placements_from_runner
+    def function(path,name,namespace):
+        node=next(n for n in ast.parse(path.read_text()).body if isinstance(n,ast.FunctionDef) and n.name==name)
+        node.returns=None
+        for arg in node.args.args:
+            arg.annotation=None
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[node],type_ignores=[])),str(path),"exec"),namespace)
+        return namespace[name]
+    vllm=Path(os.environ["MOE_VLLM_023_SOURCE"])
+    determine=function(vllm/"vllm/model_executor/layers/fused_moe/expert_map_manager.py","determine_expert_map",dict(torch=torch))
+    init=function(overlay/"vllm_ascend/eplb/core/eplb_utils.py","init_eplb_config",dict(torch=torch,determine_expert_map=determine))
+    cfg=NS(expert_map_path=None,dynamic_eplb=False,num_redundant_experts=0)
+    _,local,_,_=init(cfg,0,NS(num_experts=32,ep_size=16,ep_rank=3))
+    target=NS(layer_name="model.layers.0.mlp.experts",_expert_map=local,moe_config=NS())
+    draft=NS(**dict(target.__dict__,layer_name="draft_model.mtp.0.mlp.experts"))
+    runner=NS(model=NS(named_modules=lambda:[("target",target)]),drafter=NS(model=NS(named_modules=lambda:[("mtp",draft)])),
+              vllm_config=NS(model_config=NS(hf_config=NS(num_hidden_layers=1))))
+    mapping=placements_from_runner(runner,3,16,determine)
+    assert mapping[target.layer_name]["owners"]==[expert//2 for expert in range(32)]

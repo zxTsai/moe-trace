@@ -33,7 +33,7 @@ def test_matching_sources_are_not_advertised_as_adapter_ready(tmp_path):
     tool, roots = fixture(tmp_path)
     report = tool.inspect_sources(roots["vllm"], roots["vllm_ascend"])
     assert report["reference_source_match"] and not report["adapter_ready"]
-    assert not report["npu_verified"] and len(report["sha256"]) == 18
+    assert not report["npu_verified"] and len(report["sha256"]) == 20
     assert not (roots["vllm"] / ".git").exists()
 
 

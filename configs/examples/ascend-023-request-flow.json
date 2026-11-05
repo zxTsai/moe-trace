@@ -1,0 +1,10 @@
+{
+  "mode": "request_flow",
+  "output_root": "/trace-output",
+  "run_id": "dsv4-flow-001",
+  "node_id": "decode",
+  "interval_seconds": 5,
+  "max_file_bytes": 16777216,
+  "max_files": 4,
+  "max_requests_per_window": 128
+}
