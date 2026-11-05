@@ -11,6 +11,7 @@
 | `validation/analyze_ascend_023_debug.py` | 验证 worker 摘要、导出 target/MTP 专家次数及候选关联诊断 JSON |
 | `validation/analyze_ascend_load.py` | 汇总保留的周期负载窗口，校验计数，导出 JSON；不把轮转删除部分当作全历史 |
 | `validation/analyze_ascend_request_flow.py` | 按请求核对实际专家 owner、源宿身份和次数，导出保留窗口的源宿汇总 |
+| `validation/inspect_ascend_routing_trace.py` | 验证原始逐token层覆盖和有序Top-K宿映射，或导出某源/窗口完整JSON，不合并轨迹 |
 | `tools/inspect_ascend_v4_mtp.py` | V4 + MTP 源码/模型只读检查 |
 | `tools/stage_ascend_v4_mtp.py` | 独立 MTP 采集副本，追加 proposer/sampler 接入 |
 | `deployment/ascend_v4_mtp_1p1d.py` | P4×4 / D16×1 动态 K MTP 同步 eager 调试启动，支持 --num-speculative-tokens |

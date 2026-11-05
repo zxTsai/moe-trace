@@ -2,6 +2,9 @@
 
 ## 当前结论
 
+当前推荐 routing_trace 的[逐轮逐token路由 CPU 验证](DeepSeekV4逐轮逐Token路由CPU验证.md)：
+原始有序Top-K、实际宿映射、源目录和5秒批量落盘，不再合并成次数；A3待验收。
+
 用户确认的逐请求源 DP/device → 实际专家宿 EP/device 见
 [逐请求源宿 CPU 验证](DeepSeekV4逐请求源宿CPU验证.md)，使用 request_flow 模式。
 旧 summary 按所有请求合并，不是逐请求源宿。真实 A3 与性能仍待验收。

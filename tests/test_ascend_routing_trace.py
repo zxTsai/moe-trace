@@ -98,6 +98,23 @@ def test_idle_has_no_window_and_no_periodic_info(routing,caplog,monkeypatch):
     assert not caplog.records
 
 
+def test_idle_sampler_and_proposer_keep_native_outputs_without_capture(routing,monkeypatch):
+    runner,session=routing
+    runner.input_batch.req_ids=[]
+    monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("idle synchronize"))
+    monkeypatch.setattr(adapter,"host",lambda *args:pytest.fail("idle host conversion"))
+    marker=object()
+    assert adapter.trace_sample(lambda *args:marker)(runner,None,None) is marker
+    @adapter.trace_proposal
+    def proposal(proposer,scheduler_output=None):
+        with adapter.trace_mtp_forward(proposer,None,0,0,None,0):
+            pass
+        return marker
+    assert proposal(NS(runner=runner),scheduler_output=object()) is marker
+    session.flush()
+    assert windows(session)==[] and session.executions==0
+
+
 def test_recorded_flush_is_also_quiet(routing,caplog):
     runner,session=routing
     target(runner)

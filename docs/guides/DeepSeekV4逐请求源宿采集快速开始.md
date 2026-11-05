@@ -1,5 +1,8 @@
 # DeepSeek V4 逐请求源宿采集快速开始
 
+本页保留旧 request_flow 次数汇总。用户最终要求的“每轮哪些token在每层选择了哪些Top-K专家”
+请改用[逐轮逐token完整路由](DeepSeekV4逐轮逐Token路由快速开始.md)和 routing_trace 配置，不能只改本页输出说明。
+
 你要的统计口径是：**实际输入 token 所属 DP worker/device → 被选专家部署的 EP worker/device**，
 按请求分别累计，每个时间窗口输出一次。一个请求有多条目的关系，跨窗口只输出新增计数。
 不是客户端 IP、P→D KV 传输、网络流量或消息数。

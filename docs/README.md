@@ -6,6 +6,8 @@
 
 ## 使用指南
 
+- [DeepSeek V4 逐轮逐 token 完整路由](guides/DeepSeekV4逐轮逐Token路由快速开始.md)：当前推荐，按源目录，保留调度/执行/请求/token/逐层有序Top-K及宿端，5秒批量落盘。
+
 - [DeepSeek V4 逐请求源宿快速开始](guides/DeepSeekV4逐请求源宿采集快速开始.md)：每窗口按请求记录源 DP/device 到实际专家宿 EP/device 的选择次数。
 
 - [DeepSeek V4 周期负载汇总快速开始](guides/DeepSeekV4周期负载汇总快速开始.md)：现有官方 D 容器安装，连续计数、默认 5 秒输出 JSONL 与文件轮转，CPU 验证通过，A3 待验收。
@@ -27,6 +29,8 @@
 - [配置说明](../configs/README.md)与[脚本说明](../scripts/README.md)。
 
 ## 需求与设计
+
+- [逐轮逐 token 路由设计](design/DeepSeekV4逐轮逐Token路由轨迹设计.md)：不合并次数的完整轨迹、批量落盘、空闲与静默策略。
 
 - [逐请求源宿汇总设计](design/DeepSeekV4逐请求源宿汇总设计.md)：实际专家映射、设备身份、请求上限和增量窗口。
 

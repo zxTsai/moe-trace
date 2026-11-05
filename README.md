@@ -1,6 +1,11 @@
 # moe-trace
 
-**逐请求源宿统计：** [DeepSeek V4 逐请求源宿采集快速开始](docs/guides/DeepSeekV4逐请求源宿采集快速开始.md)。
+**当前推荐：** [逐轮、逐请求、逐 token 的完整 Top-K 路由快速开始](docs/guides/DeepSeekV4逐轮逐Token路由快速开始.md)。
+选择 `routing_trace`：按源 DP 分目录，保留观测调度序号、实际执行、token 位置、
+每层有序专家与对应宿 EP/device；默认每5秒批量写盘，空闲不写、不刷周期日志。
+旧 `summary`/`request_flow` 是次数汇总，不是这类原始路由明细。真实 A3 与性能待验收。
+
+**旧版逐请求次数汇总：** [DeepSeek V4 逐请求源宿采集快速开始](docs/guides/DeepSeekV4逐请求源宿采集快速开始.md)。
 使用 `request_flow` 模式，默认每5秒输出“请求 → 源 DP device → 专家实际部署的宿 EP device”。
 同一请求可有多个宿，读取实际专家放置映射；不是 KV/网络流量采集。旧 summary 仍是全请求合并统计。
 

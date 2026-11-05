@@ -45,7 +45,7 @@ def config():
             if type(cap) is not int or not 1<=cap<=4096:
                 raise ValueError("max_requests_per_window must be between 1 and 4096")
         if set(value) != required:
-            raise ValueError("unexpected summary config keys")
+            raise ValueError("unexpected capture config keys")
         interval = value["interval_seconds"]
         if type(interval) not in (int,float) or not 0.05 <= interval <= 3600:
             raise ValueError("interval_seconds must be between 0.05 and 3600")
@@ -410,6 +410,9 @@ def trace_sample(function):
         session = _session
         if session is None or session.capped:
             return result
+        if (getattr(session,"mode",None)=="routing_trace" and not runner.input_batch.req_ids
+                and session.current_target is None):
+            return result
         if getattr(session,"mode",None) in {"summary","request_flow"}:
             session.check()
             return result
@@ -469,6 +472,8 @@ def trace_proposal(function):
         bound = signature.bind(proposer, *args, **kwargs)
         if bound.arguments.get("scheduler_output") is None:
             return function(proposer, *args, **kwargs)  # dummy/profiling proposal
+        if getattr(session,"mode",None)=="routing_trace" and not proposer.runner.input_batch.req_ids:
+            return function(proposer,*args,**kwargs)
         if getattr(session,"mode",None) in {"summary","request_flow"}:
             token = _proposal.set(True)
             try:
