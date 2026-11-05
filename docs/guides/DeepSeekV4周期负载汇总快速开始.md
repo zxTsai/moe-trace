@@ -1,5 +1,8 @@
 # DeepSeek V4 周期负载汇总快速开始
 
+本页的旧 summary 模式会合并所有请求。若需要逐请求的 DP 源 device → 专家宿 EP device，
+请使用[逐请求源宿快速开始](DeepSeekV4逐请求源宿采集快速开始.md)及 request_flow 配置。
+
 前提：你已用官方 `quay.io/ascend/vllm-ascend:v0.23.0.post1-a3` 镜像跑通两机
 DeepSeek V4 的 PD 服务，D 为 DP16/TP1/EP16。仅在 **原 D 容器** 安装工具，
 不构建新镜像、不重装 vLLM、不新建 Conda 环境。框架实际文件须通过源码校验。

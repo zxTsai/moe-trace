@@ -6,6 +6,8 @@
 
 ## 使用指南
 
+- [DeepSeek V4 逐请求源宿快速开始](guides/DeepSeekV4逐请求源宿采集快速开始.md)：每窗口按请求记录源 DP/device 到实际专家宿 EP/device 的选择次数。
+
 - [DeepSeek V4 周期负载汇总快速开始](guides/DeepSeekV4周期负载汇总快速开始.md)：现有官方 D 容器安装，连续计数、默认 5 秒输出 JSONL 与文件轮转，CPU 验证通过，A3 待验收。
 
 - [DeepSeek V4 现有 A3 容器采集调试](guides/DeepSeekV4现有A3容器采集调试指南.md)：保留原异步/图/多流/MTP 配置，只在 D 安装插件与副本；CPU 通过，真机待验收。
@@ -25,6 +27,8 @@
 - [配置说明](../configs/README.md)与[脚本说明](../scripts/README.md)。
 
 ## 需求与设计
+
+- [逐请求源宿汇总设计](design/DeepSeekV4逐请求源宿汇总设计.md)：实际专家映射、设备身份、请求上限和增量窗口。
 
 - [周期负载汇总第一版设计](design/DeepSeekV4周期负载汇总设计.md)：设备计数、定时线程、事件依赖、滚动保留与 trace 边界。
 

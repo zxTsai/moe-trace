@@ -1,5 +1,9 @@
 # moe-trace
 
+**逐请求源宿统计：** [DeepSeek V4 逐请求源宿采集快速开始](docs/guides/DeepSeekV4逐请求源宿采集快速开始.md)。
+使用 `request_flow` 模式，默认每5秒输出“请求 → 源 DP device → 专家实际部署的宿 EP device”。
+同一请求可有多个宿，读取实际专家放置映射；不是 KV/网络流量采集。旧 summary 仍是全请求合并统计。
+
 > 当前 `feature/ascend-deepseek-v4-mtp-async-graph` 分支正在适配用户镜像
 > `quay.io/ascend/vllm-ascend:v0.23.0.post1-a3` 的异步、图执行和共享专家多流配置。
 > **现已提供保留原 D 启动配置的采集调试入口，CPU 接入验证通过，真实 A3 待验收。**
@@ -28,6 +32,7 @@
 | v0.23.0.post1-a3，DeepSeek V4，D DP16/TP1/EP16 | 原 async、FULL_DECODE_ONLY、npugraph_ex、共享专家多流、eager MTP K=1 | 可安装真机调试；CPU 源码接入通过，A3 未验收 |
 | 新调试输出 | execution/sampler/proposal JSONL、SHA256、JSON 专家计数 | 保留拒绝计算；无法关联的候选明确 unresolved |
 | 周期负载 summary | 连续设备计数、默认 5 秒窗口、JSONL 轮转、JSON 汇总 | 无逐请求轨迹/接受率；CPU 接入通过，A3 性能待测 |
+| 逐请求 request_flow | 窗口 requests 数组、源 DP/device、实际宿 EP/device、阶段/层选择次数 | 源宿身份与映射可核验；不是网络消息/字节数，A3 待验收 |
 | 旧同步 eager MTP profile | 下文原指南 | 独立 adapter/patch，不与新 profile 混装 |
 
 **DeepSeek V4 + MTP 调测入口：** [从零部署快速开始](docs/guides/DeepSeekV4开启MTP采集指南.md)

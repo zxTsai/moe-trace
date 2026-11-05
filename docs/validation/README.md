@@ -2,6 +2,10 @@
 
 ## 当前结论
 
+用户确认的逐请求源 DP/device → 实际专家宿 EP/device 见
+[逐请求源宿 CPU 验证](DeepSeekV4逐请求源宿CPU验证.md)，使用 request_flow 模式。
+旧 summary 按所有请求合并，不是逐请求源宿。真实 A3 与性能仍待验收。
+
 周期负载汇总第一版见[summary CPU 验证](DeepSeekV4周期负载汇总CPU验证.md)：
 连续设备计数、后台定时输出、有限轮转和 JSON 分析已实现，真实 A3 与性能待验收。
 
