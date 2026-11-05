@@ -44,7 +44,7 @@ class SummarySession:
             self.start_timer()
 
     def start_timer(self):
-        self.thread = threading.Thread(target=self._loop, name="moe-load-summary", daemon=True)
+        self.thread = threading.Thread(target=self._loop, name="moe-trace-writer", daemon=True)
         self.thread.start()
 
     def status(self, state):
@@ -75,7 +75,7 @@ class SummarySession:
                 self.flush()
             except BaseException as exc:
                 self.fail(exc)
-                self.logger.exception("moe-trace periodic summary failed")
+                self.logger.exception("moe-trace periodic writer failed")
                 return
 
     def _wait(self):
@@ -148,14 +148,15 @@ class SummarySession:
         if self.bytes + len(data) > limit:
             self.stream.close()
             root, keep = self.root, self.cfg["max_files"]
+            stem=getattr(self,"file_stem","load")
             if keep > 1:
-                (root/f"load.{keep-1}.jsonl").unlink(missing_ok=True)
+                (root/f"{stem}.{keep-1}.jsonl").unlink(missing_ok=True)
                 for index in range(keep-2,0,-1):
-                    source = root/f"load.{index}.jsonl"
+                    source = root/f"{stem}.{index}.jsonl"
                     if source.exists():
-                        source.replace(root/f"load.{index+1}.jsonl")
-                (root/"load.jsonl").replace(root/"load.1.jsonl")
-            self.stream = (root/"load.jsonl").open("wb")
+                        source.replace(root/f"{stem}.{index+1}.jsonl")
+                (root/f"{stem}.jsonl").replace(root/f"{stem}.1.jsonl")
+            self.stream = (root/f"{stem}.jsonl").open("wb")
             self.bytes = 0
             self.rotations += 1
             self.file_ranges = ([[]]+self.file_ranges)[:self.cfg["max_files"]]

@@ -31,8 +31,14 @@ def config():
     if not name:
         return None
     value = json.loads(Path(name).read_text())
-    if value.get("mode") in {"summary","request_flow"}:
+    if value.get("mode") in {"summary","request_flow","routing_trace"}:
         required = {"mode", "output_root", "run_id", "node_id", "interval_seconds", "max_file_bytes", "max_files"}
+        if value["mode"]=="routing_trace":
+            required.update({"max_buffer_bytes","save_token_ids","save_expert_weights"})
+            if type(value.get("max_buffer_bytes")) is not int or value["max_buffer_bytes"]<1:
+                raise ValueError("max_buffer_bytes must be positive")
+            if any(type(value.get(key)) is not bool for key in ("save_token_ids","save_expert_weights")):
+                raise ValueError("trace privacy flags must be bool")
         if value["mode"]=="request_flow":
             required.add("max_requests_per_window")
             cap=value.get("max_requests_per_window")
@@ -54,7 +60,7 @@ def config():
             raise ValueError("max_file_bytes must be positive")
         if any(os.environ.get(key) for key in ("MOE_TRACE_CONFIG", "MOE_TRACE_V4_MTP_CONFIG", "MOE_TRACE_V4_DEBUG_CONFIG", "MOE_TRACE_QWEN36_CONFIG", "MOE_TRACE_V41_DEBUG_CONFIG")):
             raise ValueError("cannot combine capture adapters")
-        return dict(value,save_token_ids=False,save_expert_weights=False)
+        return value if value["mode"]=="routing_trace" else dict(value,save_token_ids=False,save_expert_weights=False)
     required = {"output_root", "run_id", "node_id", "save_token_ids", "save_expert_weights",
                 "max_executions", "max_file_bytes"}
     if value.get("mode","trace") != "trace" or set(value) not in (required, required|{"mode"}):
@@ -213,7 +219,11 @@ def initialize(runner):
     ranks = dict(dp=dp.rank_in_group, tp=tp.rank_in_group, ep=ep.rank_in_group)
     import torch
     ranks["device"] = int(torch.npu.current_device())
-    if cfg.get("mode") in {"summary","request_flow"}:
+    if cfg.get("mode")=="routing_trace":
+        from .ascend_routing_trace import RoutingTraceSession
+        _session=RoutingTraceSession(runner,cfg,ranks)
+        arm_graph_capture(runner.vllm_config.model_config.hf_config.num_hidden_layers+8,synchronize)
+    elif cfg.get("mode") in {"summary","request_flow"}:
         if cfg["mode"]=="request_flow":
             from .ascend_request_flow import RequestFlowSession as Recorder
         else:
@@ -361,6 +371,10 @@ def forward(session, scope, ids, positions, row_builder, metadata):
 def trace_target(runner, scheduler, ids, positions, mode):
     session = _session
     if session is None or session.capped:
+        yield
+        return
+    if getattr(session,"mode",None)=="routing_trace" and not runner.input_batch.req_ids:
+        # Idle DP workers still execute native model/collectives as required.
         yield
         return
     if getattr(session,"mode",None) in {"summary","request_flow"}:

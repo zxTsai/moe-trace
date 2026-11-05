@@ -1,0 +1,12 @@
+{
+  "mode": "routing_trace",
+  "output_root": "/trace-output",
+  "run_id": "dsv4-routes-001",
+  "node_id": "decode",
+  "interval_seconds": 5,
+  "max_buffer_bytes": 16777216,
+  "max_file_bytes": 67108864,
+  "max_files": 4,
+  "save_token_ids": false,
+  "save_expert_weights": false
+}

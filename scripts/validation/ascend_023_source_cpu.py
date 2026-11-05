@@ -25,11 +25,12 @@ def main():
         "tests/test_ascend_graph_bridge.py", "tests/test_graph_routes.py", "tests/test_ascend_async_inventory.py",
         "tests/test_ascend_load_summary.py",
         "tests/test_ascend_request_flow.py",
+        "tests/test_ascend_routing_trace.py",
         "--basetemp", str(output / "pytest")]
     result = subprocess.run(command, cwd=ROOT, env=environment, capture_output=True, text=True)
     (output/"pytest.log").write_text(result.stdout+result.stderr)
     report = dict(validation_level="cpu_reference_source_with_hardware_stubs",
-        modes=["trace","summary","request_flow"],
+        modes=["trace","summary","request_flow","routing_trace"],
         passed=result.returncode == 0, npu_verified=False, full_service_verified=False,
         real_model_loaded=False, vllm_source=str(args.vllm_source.resolve()),
         ascend_source=str(args.ascend_source.resolve()),

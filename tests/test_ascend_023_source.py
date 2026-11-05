@@ -96,7 +96,7 @@ def test_actual_runner_forward_w8a8_and_sampler(setup, overlay):
 
 
 @pytest.mark.parametrize("k", [1,2,3])
-@pytest.mark.parametrize("summary_mode", [False,True,"request_flow"])
+@pytest.mark.parametrize("summary_mode", [False,True,"request_flow","routing_trace"])
 def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summary_mode,monkeypatch):
     runner, session = setup
     if summary_mode:
@@ -108,13 +108,20 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summar
             from test_ascend_request_flow import placements
             Recorder=RequestFlowSession
             options["placements"]=placements()
-        session=Recorder(runner,dict(session.cfg,mode="request_flow" if summary_mode=="request_flow" else "summary",
+        if summary_mode=="routing_trace":
+            from moe_trace.adapters.ascend_routing_trace import RoutingTraceSession
+            from test_ascend_request_flow import placements
+            Recorder=RoutingTraceSession
+            options["placements"]=placements()
+        session=Recorder(runner,dict(session.cfg,mode=summary_mode if isinstance(summary_mode,str) else "summary",
             run_id="summary-source",max_requests_per_window=128,
+            max_buffer_bytes=1048576,
             save_token_ids=False,save_expert_weights=False,interval_seconds=5,max_files=4),
             dict(dp=0,tp=0,ep=0,device=0),start_thread=False,**options)
         monkeypatch.setattr(adapter,"_session",session)
-        monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("summary must not synchronize per forward"))
-        monkeypatch.setattr(adapter,"host",lambda *args:pytest.fail("summary must not read per-token host data"))
+        if summary_mode!="routing_trace":
+            monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("summary must not synchronize per forward"))
+            monkeypatch.setattr(adapter,"host",lambda *args:pytest.fail("summary must not read per-token host data"))
     runner.vllm_config.model_config.max_model_len=100
     runner.vllm_config.speculative_config.num_speculative_tokens=k
     path=overlay/"vllm_ascend/spec_decode/llm_base_proposer.py"
@@ -172,10 +179,20 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summar
     samples=[r+[-1]*(k+1-len(r)) for r in samples]
     adapter.trace_sample(lambda *args:NS(sampled_token_ids=torch.tensor(samples)))(runner,None,
         NS(num_draft_tokens=[k,k],draft_token_ids=torch.tensor(b+a)))
-    if summary_mode=="request_flow":
+    if summary_mode in {"request_flow","routing_trace"}:
         for dp in range(1,16):
             Recorder(runner,session.cfg,dict(dp=dp,tp=0,ep=dp,device=dp),start_thread=False,**options).close()
     session.close()
+    if summary_mode=="routing_trace":
+        report=script("scripts/validation/inspect_ascend_routing_trace.py").analyze(session.root.parent.parent)
+        assert report["expert_choices"]==dict(target=4*(k+1),mtp=4*k,combined=8*k+4)
+        assert report["worker_coverage_complete"]
+        record=json.loads((session.root/"routes.jsonl").read_text().splitlines()[0])
+        executions=[execution for round_ in record["rounds"] for execution in round_["executions"]]
+        assert [e["mtp_step"] for e in executions if e["scope"]=="mtp"]==list(range(k))
+        assert len({e["execution_id"] for e in executions})==k+1
+        assert [t["token_position"] for t in executions[-1]["requests"][0]["tokens"]]==list(range(2,3+k))
+        return
     if summary_mode:
         record=json.loads((session.root/"load.jsonl").read_text().splitlines()[0])
         assert record["expert_choices"]==dict(target=4*(k+1),mtp=4*k,combined=8*k+4)
@@ -201,16 +218,25 @@ def test_actual_mtp_first_pass_and_autoregressive_loop(setup, overlay, k, summar
     assert report["decisions"]["unverified"]==0
 
 
-@pytest.mark.parametrize("summary_mode",[False,True])
+@pytest.mark.parametrize("summary_mode",[False,True,"routing_trace"])
 def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, monkeypatch,summary_mode):
     runner, session = setup
     if summary_mode:
         from moe_trace.adapters.ascend_load_summary import SummarySession
-        session=SummarySession(runner,dict(session.cfg,mode="summary",run_id="graph-summary",
+        Recorder=SummarySession
+        options={}
+        if summary_mode=="routing_trace":
+            from moe_trace.adapters.ascend_routing_trace import RoutingTraceSession
+            from test_ascend_request_flow import placements
+            Recorder=RoutingTraceSession
+            options["placements"]=placements()
+        session=Recorder(runner,dict(session.cfg,mode="routing_trace" if summary_mode=="routing_trace" else "summary",run_id="graph-summary",
+            max_buffer_bytes=1048576,
             save_token_ids=False,save_expert_weights=False,interval_seconds=5,max_files=4),
-            dict(dp=0,tp=0,ep=0),start_thread=False)
+            dict(dp=0,tp=0,ep=0),start_thread=False,**options)
         monkeypatch.setattr(adapter,"_session",session)
-        monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("summary full-device barrier"))
+        if summary_mode!="routing_trace":
+            monkeypatch.setattr(adapter,"synchronize",lambda:pytest.fail("summary full-device barrier"))
     class Mode(Enum):
         NONE=0
         FULL=1
@@ -259,14 +285,20 @@ def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, mo
         graph_pool=None,is_debugging_mode=False,use_eagle=True,enable_enpu=False)
     arm_graph_capture(1,None if summary_mode else lambda:None)
     original=call(wrapper) # Real reference __call__ startup capture; graph runtime is simulated.
-    assert not (session.root/"load.jsonl").read_text() if summary_mode else not events(session)
+    file="routes.jsonl" if summary_mode=="routing_trace" else "load.jsonl"
+    assert not (session.root/file).read_text() if summary_mode else not events(session)
     route_ids[:]=torch.tensor([[5,6],[7,0]])
     if summary_mode:
         scheduler=NS(num_scheduled_tokens={"A":1,"B":1},total_num_scheduled_tokens=2,scheduled_spec_decode_tokens={})
-        with adapter.trace_target(runner,scheduler,None,torch.tensor([2,1]),Mode.FULL):
+        with adapter.trace_target(runner,scheduler,torch.tensor([12,22]),torch.tensor([2,1]),Mode.FULL):
             assert call(wrapper) is original
         session.flush()
-        record=json.loads((session.root/"load.jsonl").read_text().splitlines()[0])
+        record=json.loads((session.root/file).read_text().splitlines()[0])
+        if summary_mode=="routing_trace":
+            requests=record["rounds"][0]["executions"][0]["requests"]
+            assert [r["tokens"][0]["layers"][0]["expert_ids"] for r in requests]==[[5,6],[7,0]]
+            assert calls==["capture"]
+            return
         counts=next(row for row in record["layers"] if row["kind"]=="target_decode")
         assert counts["expert_selection_counts"]==[1,0,0,0,0,1,1,1]
         assert calls==["capture"]
@@ -277,16 +309,18 @@ def test_actual_acl_wrapper_capture_and_replay_cpu_simulation(setup, overlay, mo
     assert snapshots[0].expert_ids.tolist()==[[5,6],[7,0]]
 
 
-@pytest.mark.parametrize("mode",["trace","summary","request_flow"])
+@pytest.mark.parametrize("mode",["trace","summary","request_flow","routing_trace"])
 def test_launcher_preserves_original_command_and_checks_overlay(setup,overlay,tmp_path,mode):
     _,session=setup
     config=tmp_path/"launch.json"
     cfg=dict(session.cfg,run_id="launch-check")
-    if mode in {"summary","request_flow"}:
+    if mode in {"summary","request_flow","routing_trace"}:
         cfg={k:cfg[k] for k in ("output_root","run_id","node_id","max_file_bytes")}
         cfg.update(mode=mode,interval_seconds=5,max_files=4)
         if mode=="request_flow":
             cfg["max_requests_per_window"]=128
+        if mode=="routing_trace":
+            cfg.update(max_buffer_bytes=1048576,save_token_ids=False,save_expert_weights=False)
     config.write_text(json.dumps(cfg))
     launcher=Path(__file__).resolve().parents[1]/"scripts/deployment/ascend_023_debug.py"
     command=[sys.executable,str(launcher),"--overlay",str(overlay),"--config",str(config)]

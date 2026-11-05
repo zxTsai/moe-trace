@@ -119,7 +119,8 @@ def stage(vllm_package, ascend_package, parent, check_only=False):
             "plugin_sha256": {name: hashlib.sha256((ROOT/"src"/name).read_bytes()).hexdigest()
                 for name in ("moe_trace/adapters/ascend_023_debug.py", "moe_trace/adapters/ascend_graph_bridge.py",
                              "moe_trace/adapters/graph_routes.py", "moe_trace/adapters/ascend_load_summary.py",
-                             "moe_trace/adapters/ascend_request_flow.py", "moe_trace/io.py")},
+                             "moe_trace/adapters/ascend_request_flow.py", "moe_trace/adapters/ascend_routing_trace.py",
+                             "moe_trace/io.py")},
         }, ensure_ascii=False, indent=2)+"\n")
     except BaseException:
         shutil.rmtree(output)
