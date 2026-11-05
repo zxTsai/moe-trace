@@ -29,7 +29,15 @@ python scripts/validation/ascend_023_source_cpu.py \
 ```
 
 会保存 pytest 日志、CPU报告、参考源码副本和每个测试场景的原始 routes.jsonl。
-最终数量与原始窗口实际导出证据在完成本轮回归后补充。
+本轮专项 **92 passed**，全仓 **442 passed，无跳过**。
+新指南7段Bash通过bash -n，2段JSON通过解析，标准库help及文档链接检查通过。
+
+本机证据目录（不是用户安装路径）：
+`/home/czx/code/moe-routing/outputs/ascend-routing-trace-cpu/ascend-023-source-cpu-3i_dxf3y/`。
+实际CLI生成 trace-check-k3.json 和 source-dp-000-window-0.json，验证16个CPU worker身份，
+其中1个活跃、15个空闲；K=3保留主模型8个输入实例和MTP6个输入实例，共14条逐层路由，
+每条Top-K=2，计数自检target=16/mtp=12/合计28。原始明细没有合并成这些计数。
+独立的多层测试另使用6个有序专家、非线性目的rank，检查逐项数组、位置和源目录。
 
 ## 边界
 

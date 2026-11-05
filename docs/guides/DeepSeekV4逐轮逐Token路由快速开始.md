@@ -204,3 +204,5 @@ full_history_retained=false 说明旧文件已删除，只能验证/查看当前
 这些是 token 原属设备到专家拥有者的逻辑路由，不是 HCCL/KV 字节或逐跳通信流量。
 
 恢复原版本：停止本次 D，在未经过包装器的终端直接运行原脚本即可，无需重装框架。
+
+测试证据与硬件边界见[逐轮逐token CPU验证](../validation/DeepSeekV4逐轮逐Token路由CPU验证.md)。
